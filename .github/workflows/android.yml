@@ -1,3 +1,4 @@
+
 name: Build Iraqi Studio AI
 
 on:
@@ -22,6 +23,34 @@ jobs:
 
       - name: Extract Android project
         run: unzip -q IraqiStudioAI-source.zip
+
+      - name: Fix Java and Kotlin JVM targets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("IraqiStudioAI/app/build.gradle.kts")
+          s = p.read_text()
+
+          needle = "    buildFeatures { compose = true }"
+
+          replacement = """    compileOptions {
+              sourceCompatibility = JavaVersion.VERSION_17
+              targetCompatibility = JavaVersion.VERSION_17
+          }
+
+          kotlinOptions {
+              jvmTarget = "17"
+          }
+
+          buildFeatures { compose = true }"""
+
+          if needle not in s:
+              raise SystemExit("Could not find expected buildFeatures line")
+
+          p.write_text(s.replace(needle, replacement, 1))
+          print("Java and Kotlin targets set to 17")
+          PY
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
