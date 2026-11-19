@@ -13,6 +13,7 @@ android {
         targetSdk = 35
         versionCode = 6
         versionName = "0.6.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -41,4 +42,7 @@ dependencies {
     implementation("com.google.mediapipe:tasks-vision:1.1.1")
     implementation("org.tensorflow:tensorflow-lite:2.17.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:core:1.6.1")
 }
