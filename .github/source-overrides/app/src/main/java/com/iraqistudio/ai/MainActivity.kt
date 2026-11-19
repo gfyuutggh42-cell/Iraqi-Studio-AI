@@ -597,7 +597,7 @@ fun StudioScreen() {
                     }
                     Text("أدوات إضافية مثل القصّ الدقيق والفلاتر وتنعيم البشرة وإزالة الخلفية ستُضاف بعد تنفيذها واختبارها.", color = Color.LightGray, fontSize = 12.sp)
                 }
-                Text("Iraqi Studio AI • النسخة 0.5 التجريبية", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Text("Iraqi Studio AI • النسخة 0.6", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
             }
         }
     }
