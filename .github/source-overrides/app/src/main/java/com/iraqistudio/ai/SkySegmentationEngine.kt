@@ -10,7 +10,7 @@ import java.nio.ByteOrder
 /**
  * ADE20K DeepLabV3 MobileNetV2 semantic segmentation.
  * Verified model contract in CI:
- * input [1, 512, 512, 3] FLOAT32 RGB in [0,255]
+ * input [1, 512, 512, 3] FLOAT32 RGB normalized to [0,1]
  * output [1, 512, 512] INT32 class ids (ArgMax).
  * ADE20K zero-based class id 2 is sky.
  */
@@ -36,8 +36,8 @@ fun segmentSky(context: Context, bitmap: Bitmap): SegmentationMasks {
         }
 
         // The verified MLCommons model expects a 512x512 RGB float tensor.
-        // Pixel values are passed in the original 0..255 range, without
-        // ImageNet normalization.
+        // The published MLCommons test harness divides RGB pixel values by 255.
+        // Match that exact preprocessing contract.
         val modelBitmap = Bitmap.createScaledBitmap(bitmap, 512, 512, true)
         val pixels = IntArray(512 * 512)
         modelBitmap.getPixels(pixels, 0, 512, 0, 0, 512, 512)
@@ -46,9 +46,9 @@ fun segmentSky(context: Context, bitmap: Bitmap): SegmentationMasks {
         val input = ByteBuffer.allocateDirect(inputTensor.numBytes())
             .order(ByteOrder.nativeOrder())
         for (pixel in pixels) {
-            input.putFloat(((pixel shr 16) and 255).toFloat())
-            input.putFloat(((pixel shr 8) and 255).toFloat())
-            input.putFloat((pixel and 255).toFloat())
+            input.putFloat(((pixel shr 16) and 255) / 255f)
+            input.putFloat(((pixel shr 8) and 255) / 255f)
+            input.putFloat((pixel and 255) / 255f)
         }
         input.rewind()
 
