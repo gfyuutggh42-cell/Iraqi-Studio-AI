@@ -90,16 +90,16 @@ fun segmentSky(context: Context, bitmap: Bitmap): SegmentationMasks {
 
         // Remove isolated single-pixel predictions without eroding broad sky areas.
         val cleaned = labels.copyOf()
-        for (y in 1 until maskHeight - 1) {
-            for (x in 1 until maskWidth - 1) {
+        for (y in 1 until resizedHeight - 1) {
+            for (x in 1 until resizedWidth - 1) {
                 var count = 0
                 for (dy in -1..1) for (dx in -1..1) {
-                    if (labels[(y + dy) * maskWidth + x + dx].toInt() == 1) count++
+                    if (labels[(y + dy) * resizedWidth + x + dx].toInt() == 1) count++
                 }
-                if (count <= 2) cleaned[y * maskWidth + x] = 0
+                if (count <= 2) cleaned[y * resizedWidth + x] = 0
             }
         }
-        return SegmentationMasks(maskWidth, maskHeight, cleaned)
+        return SegmentationMasks(resizedWidth, resizedHeight, cleaned)
     } finally {
         interpreter.close()
     }
