@@ -79,7 +79,10 @@ private fun makeSelectivePreview(
     skyMasks: SegmentationMasks?,
     selectedRegion: Int,
     hueShift: Float,
-    saturationScale: Float
+    saturationScale: Float,
+    skyBrightness: Float = 0f,
+    skyContrast: Float = 1f,
+    skyTemperature: Float = 0f
 ): Bitmap {
     val pixels = IntArray(source.width * source.height)
     source.getPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
@@ -92,6 +95,13 @@ private fun makeSelectivePreview(
                 skyMasks?.categoryAt(x, y, source.width, source.height) == 1 && personClass == 0
             } else personClass == selectedRegion
             if (selectedPixel) {
+                if (selectedRegion == 6) {
+                    val original = pixels[i]
+                    val r = (((original shr 16) and 255).toFloat() - 128f) * skyContrast + 128f + skyBrightness * 255f + skyTemperature * 38f
+                    val g = (((original shr 8) and 255).toFloat() - 128f) * skyContrast + 128f + skyBrightness * 255f
+                    val b = ((original and 255).toFloat() - 128f) * skyContrast + 128f + skyBrightness * 255f - skyTemperature * 38f
+                    pixels[i] = (original and -0x1000000) or (r.toInt().coerceIn(0,255) shl 16) or (g.toInt().coerceIn(0,255) shl 8) or b.toInt().coerceIn(0,255)
+                }
                 android.graphics.Color.colorToHSV(pixels[i], hsv)
                 hsv[0] = (hsv[0] + hueShift + 360f) % 360f
                 hsv[1] = (hsv[1] * saturationScale).coerceIn(0f, 1f)
@@ -116,7 +126,10 @@ private fun enhanceForExport(
     skyMasks: SegmentationMasks? = null,
     selectedRegion: Int = -1,
     regionHue: Float = 0f,
-    regionSaturation: Float = 1f
+    regionSaturation: Float = 1f,
+    skyBrightness: Float = 0f,
+    skyContrast: Float = 1f,
+    skyTemperature: Float = 0f
 ): Bitmap {
     val scale = if (maxDimension <= 0) 1f else min(1f, maxDimension.toFloat() / max(source.width, source.height).toFloat())
     val width = max(1, (source.width * scale).toInt())
@@ -148,6 +161,13 @@ private fun enhanceForExport(
                 skyMasks?.categoryAt(x, y, width, height) == 1 && personClass == 0
             } else personClass == selectedRegion
             if (selectedPixel) {
+                if (selectedRegion == 6) {
+                    val original = toned[i]
+                    val r = (((original shr 16) and 255).toFloat() - 128f) * skyContrast + 128f + skyBrightness * 255f + skyTemperature * 38f
+                    val g = (((original shr 8) and 255).toFloat() - 128f) * skyContrast + 128f + skyBrightness * 255f
+                    val bl = ((original and 255).toFloat() - 128f) * skyContrast + 128f + skyBrightness * 255f - skyTemperature * 38f
+                    toned[i] = (original and -0x1000000) or (r.toInt().coerceIn(0,255) shl 16) or (g.toInt().coerceIn(0,255) shl 8) or bl.toInt().coerceIn(0,255)
+                }
                 val pixel = toned[i]
                 val hsv = FloatArray(3)
                 android.graphics.Color.colorToHSV(pixel, hsv)
@@ -208,16 +228,20 @@ fun StudioScreen() {
     var selectedRegionName by remember { mutableStateOf("الملابس") }
     var regionHue by remember { mutableFloatStateOf(0f) }
     var regionSaturation by remember { mutableFloatStateOf(1f) }
+    var skyPanelOpen by remember { mutableStateOf(true) }
+    var skyBrightness by remember { mutableFloatStateOf(0f) }
+    var skyContrast by remember { mutableFloatStateOf(1f) }
+    var skyTemperature by remember { mutableFloatStateOf(0f) }
     var isAnalyzing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val regionOptions = listOf("الخلفية" to 0, "الشعر" to 1, "بشرة الجسم" to 2, "الوجه" to 3, "الملابس" to 4, "الإكسسوارات" to 5, "السماء" to 6)
-    LaunchedEffect(photoBitmap, segmentationMasks, skySegmentationMasks, selectedRegionName, regionHue, regionSaturation) {
+    LaunchedEffect(photoBitmap, segmentationMasks, skySegmentationMasks, selectedRegionName, regionHue, regionSaturation, skyBrightness, skyContrast, skyTemperature) {
         val source = photoBitmap
         val masks = segmentationMasks
         if (source != null && masks != null) {
             val regionId = regionOptions.firstOrNull { it.first == selectedRegionName }?.second ?: 4
             val generated = withContext(Dispatchers.Default) {
-                makeSelectivePreview(source, masks, skySegmentationMasks, regionId, regionHue, regionSaturation)
+                makeSelectivePreview(source, masks, skySegmentationMasks, regionId, regionHue, regionSaturation, skyBrightness, skyContrast, skyTemperature)
             }
             selectivePreview = generated
         } else {
@@ -249,6 +273,9 @@ fun StudioScreen() {
                 selectedRegionName = "الملابس"
                 regionHue = 0f
                 regionSaturation = 1f
+                skyBrightness = 0f
+                skyContrast = 1f
+                skyTemperature = 0f
                 if (photoBitmap == null) Toast.makeText(context, "تعذر فتح الصورة", Toast.LENGTH_LONG).show()
             } catch (error: Exception) {
                 Toast.makeText(context, "تعذر فتح الصورة: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
@@ -282,7 +309,7 @@ fun StudioScreen() {
             try {
                 val maxDimension = when (photoResolution) { "720p" -> 1280; "1080p" -> 1920; "2K" -> 2560; else -> 0 }
                 val selectedRegionId = regionOptions.firstOrNull { it.first == selectedRegionName }?.second ?: 4
-                val enhanced = enhanceForExport(bitmap, brightness, contrast, saturation, clarity, maxDimension, segmentationMasks, skySegmentationMasks, selectedRegionId, regionHue, regionSaturation)
+                val enhanced = enhanceForExport(bitmap, brightness, contrast, saturation, clarity, maxDimension, segmentationMasks, skySegmentationMasks, selectedRegionId, regionHue, regionSaturation, skyBrightness, skyContrast, skyTemperature)
                 context.contentResolver.openOutputStream(destination)?.use { output ->
                     if (!enhanced.compress(Bitmap.CompressFormat.JPEG, 95, output)) error("تعذر إنشاء ملف الصورة")
                 } ?: error("تعذر فتح مكان الحفظ")
@@ -470,6 +497,34 @@ fun StudioScreen() {
                             Slider(value = saturation, onValueChange = { saturation = it }, valueRange = 0f..1.8f, enabled = photoBitmap != null)
                             Text("وضوح التفاصيل  ${clarity.toInt()}%", color = Color.White)
                             Slider(value = clarity, onValueChange = { clarity = it }, valueRange = 0f..100f, enabled = photoBitmap != null)
+                            Divider(color = Color.DarkGray)
+                            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF202B3B)), shape = RoundedCornerShape(16.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Tune, null, tint = Color(0xFF78CFFF), modifier = Modifier.size(26.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Column {
+                                                Text("استوديو السماء", color = Color.White, fontWeight = FontWeight.Bold)
+                                                Text("لوحة مستقلة للضوء واللون", color = Color.LightGray, fontSize = 11.sp)
+                                            }
+                                        }
+                                        IconButton(onClick = { skyPanelOpen = !skyPanelOpen }) {
+                                            Icon(if (skyPanelOpen) Icons.Default.Contrast else Icons.Default.Tune, contentDescription = "فتح أو إغلاق لوحة السماء", tint = Color(0xFF78CFFF))
+                                        }
+                                    }
+                                    if (skyPanelOpen) {
+                                        Text(if (skySegmentationMasks != null) "تم تحليل قناع السماء؛ اختر السماء من المناطق لتطبيق هذه الإعدادات عليها فقط." else "أدوات اللوحة جاهزة، لكن قناع السماء لم يُعتمد بعد؛ لن نغيّر أي جزء آخر من الصورة.", color = if (skySegmentationMasks != null) Mint else Color(0xFFFFC66D), fontSize = 11.sp)
+                                        Text("إضاءة السماء: ${(skyBrightness * 100).toInt()}", color = Color.White)
+                                        Slider(value = skyBrightness, onValueChange = { skyBrightness = it }, valueRange = -0.5f..0.5f, enabled = skySegmentationMasks != null)
+                                        Text("تباين السماء: ${(skyContrast * 100).toInt()}%", color = Color.White)
+                                        Slider(value = skyContrast, onValueChange = { skyContrast = it }, valueRange = 0.5f..1.8f, enabled = skySegmentationMasks != null)
+                                        Text("دفء اللون / برودته: ${(skyTemperature * 100).toInt()}", color = Color.White)
+                                        Slider(value = skyTemperature, onValueChange = { skyTemperature = it }, valueRange = -1f..1f, enabled = skySegmentationMasks != null)
+                                        Text("درجة اللون والتشبع تُضبطان من أدوات المنطقة بعد اختيار السماء.", color = Color.LightGray, fontSize = 11.sp)
+                                    }
+                                }
+                            }
                             Divider(color = Color.DarkGray)
                             Text("العزل الذكي للمناطق", color = Color.White, fontWeight = FontWeight.Bold)
                             Text("حلّل الصورة لتحديد السماء وأجزاء الشخص والملابس والخلفية، ثم غيّر لون المنطقة المختارة وحدها. يتم استبعاد أجزاء الشخص من قناع السماء.", color = Color.LightGray, fontSize = 12.sp)
