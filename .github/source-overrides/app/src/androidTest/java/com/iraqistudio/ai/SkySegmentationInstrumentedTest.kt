@@ -11,12 +11,13 @@ import org.junit.runner.RunWith
 class SkySegmentationInstrumentedTest {
     @Test
     fun detectsSkyOnAndroidRuntime() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val bitmap = context.assets.open("ade20k_sky_test.jpg").use {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val appContext = instrumentation.targetContext
+        val bitmap = instrumentation.context.assets.open("ade20k_sky_test.jpg").use {
             BitmapFactory.decodeStream(it)
         } ?: error("تعذر تحميل صورة اختبار السماء")
 
-        val mask = segmentSky(context, bitmap)
+        val mask = segmentSky(appContext, bitmap)
         val skyPixels = mask.labels.count { (it.toInt() and 0xff) == 1 }
         bitmap.recycle()
 
