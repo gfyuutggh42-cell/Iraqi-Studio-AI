@@ -48,7 +48,8 @@ jobs:
         working-directory: IraqiStudioAI
         run: |
           python -m pip install --quiet 'numpy<2' pillow tflite-runtime==2.14.0
-          curl -fL --retry 3 https://raw.githubusercontent.com/onnx/tensorflow-onnx/main/tests/beach.jpg -o /tmp/ade20k-sky-test.jpg
+          mkdir -p app/src/androidTest/assets
+          curl -fL --retry 3 https://raw.githubusercontent.com/onnx/tensorflow-onnx/main/tests/beach.jpg -o app/src/androidTest/assets/ade20k_sky_test.jpg
           python - <<'PY'
           import numpy as np
           from tflite_runtime.interpreter import Interpreter
@@ -74,7 +75,7 @@ jobs:
           assert result.shape == (1, 512, 512), "Unexpected inference output"
           assert int(result.min()) >= 0 and int(result.max()) < 150, "ADE20K class ids out of range"
           from PIL import Image
-          scene = np.asarray(Image.open("/tmp/ade20k-sky-test.jpg").convert("RGB").resize((512, 512)), dtype=np.float32)[None, ...] / 255.0
+          scene = np.asarray(Image.open("app/src/androidTest/assets/ade20k_sky_test.jpg").convert("RGB").resize((512, 512)), dtype=np.float32)[None, ...] / 255.0
           interpreter.set_tensor(inp["index"], scene)
           interpreter.invoke()
           scene_result = interpreter.get_tensor(out["index"])[0]
@@ -91,6 +92,8 @@ jobs:
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/MainActivity.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/MainActivity.kt
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/SegmentationEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/SegmentationEngine.kt
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/SkySegmentationEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/SkySegmentationEngine.kt
+          mkdir -p IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai
+          cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt
           cp .github/source-overrides/app/build.gradle.kts IraqiStudioAI/app/build.gradle.kts
 
       - name: Upload prepared source for inspection
@@ -109,6 +112,15 @@ jobs:
       - name: Build APK
         working-directory: IraqiStudioAI
         run: gradle assembleDebug
+
+      - name: Run sky segmentation on Android 10 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          target: default
+          arch: x86_64
+          disable-animations: true
+          script: cd IraqiStudioAI && gradle connectedDebugAndroidTest
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
