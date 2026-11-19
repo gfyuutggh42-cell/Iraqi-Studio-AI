@@ -1,4 +1,3 @@
-
 name: Build Iraqi Studio AI
 
 on:
@@ -7,6 +6,7 @@ on:
     paths:
       - 'IraqiStudioAI-source.zip'
       - '.github/workflows/android.yml'
+      - '.github/source-overrides/**'
 
 jobs:
   build:
@@ -24,41 +24,18 @@ jobs:
       - name: Extract Android project
         run: unzip -q IraqiStudioAI-source.zip
 
-      - name: Upload extracted source for inspection
+      - name: Apply updated editor source
+        run: |
+          cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/MainActivity.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/MainActivity.kt
+          cp .github/source-overrides/app/build.gradle.kts IraqiStudioAI/app/build.gradle.kts
+
+      - name: Upload prepared source for inspection
         uses: actions/upload-artifact@v4
         with:
-          name: IraqiStudioAI-extracted-source
+          name: IraqiStudioAI-v0.2-source
           path: IraqiStudioAI/
           if-no-files-found: error
           retention-days: 3
-
-      - name: Fix Java and Kotlin JVM targets
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path("IraqiStudioAI/app/build.gradle.kts")
-          s = p.read_text()
-
-          needle = "    buildFeatures { compose = true }"
-
-          replacement = """    compileOptions {
-              sourceCompatibility = JavaVersion.VERSION_17
-              targetCompatibility = JavaVersion.VERSION_17
-          }
-
-          kotlinOptions {
-              jvmTarget = "17"
-          }
-
-          buildFeatures { compose = true }"""
-
-          if needle not in s:
-              raise SystemExit("Could not find expected buildFeatures line")
-
-          p.write_text(s.replace(needle, replacement, 1))
-          print("Java and Kotlin targets set to 17")
-          PY
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -72,5 +49,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Iraqi-Studio-AI-APK
+          name: Iraqi-Studio-AI-APK-v0.2
           path: IraqiStudioAI/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
