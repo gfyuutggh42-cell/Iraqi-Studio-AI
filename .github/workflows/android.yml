@@ -38,6 +38,33 @@ jobs:
           test "$(head -c 4 app/src/main/assets/deeplabv3_ade20k.tflite | od -An -tx1 | tr -d ' \\n')" = "54464c33"
           test "$(stat -c%s app/src/main/assets/deeplabv3_ade20k.tflite)" -gt 5000000
 
+      - name: Inspect and smoke-test ADE20K model tensors
+        working-directory: IraqiStudioAI
+        run: |
+          python -m pip install --quiet tflite-runtime==2.14.0
+          python - <<'PY'
+          import numpy as np
+          from tflite_runtime.interpreter import Interpreter
+          model = "app/src/main/assets/deeplabv3_ade20k.tflite"
+          interpreter = Interpreter(model_path=model, num_threads=2)
+          interpreter.allocate_tensors()
+          inp = interpreter.get_input_details()[0]
+          out = interpreter.get_output_details()[0]
+          print("INPUT:", inp["shape"].tolist(), inp["dtype"].__name__, inp["name"])
+          print("OUTPUT:", out["shape"].tolist(), out["dtype"].__name__, out["name"])
+          assert inp["shape"].tolist() == [1, 512, 512, 3], "Unexpected model input shape"
+          assert inp["dtype"] == np.float32, "Unexpected model input dtype"
+          sample = np.zeros(inp["shape"], dtype=np.float32)
+          sample[:, :, :, 0] = 90.0
+          sample[:, :, :, 1] = 140.0
+          sample[:, :, :, 2] = 210.0
+          interpreter.set_tensor(inp["index"], sample)
+          interpreter.invoke()
+          result = interpreter.get_tensor(out["index"])
+          print("INFERENCE OUTPUT:", result.shape, result.dtype, "classes:", np.unique(result)[:20])
+          assert result.shape[0] == 1 and result.size >= 512 * 512, "Unexpected segmentation output"
+          PY
+
       - name: Apply updated editor source
         run: |
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/MainActivity.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/MainActivity.kt
