@@ -31,17 +31,25 @@ fun segmentSky(context: Context, bitmap: Bitmap): SegmentationMasks {
         }
         val inputHeight = inputShape[1]
         val inputWidth = inputShape[2]
-        val resized = Bitmap.createScaledBitmap(bitmap, inputWidth, inputHeight, true)
-        val pixels = IntArray(inputWidth * inputHeight)
-        resized.getPixels(pixels, 0, inputWidth, 0, 0, inputWidth, inputHeight)
+        // Preserve the original aspect ratio: fit the image into the model's
+        // square input and leave the unused right/bottom area at normalized zero.
+        val scale = minOf(inputWidth.toFloat() / bitmap.width, inputHeight.toFloat() / bitmap.height)
+        val resizedWidth = (bitmap.width * scale).toInt().coerceIn(1, inputWidth)
+        val resizedHeight = (bitmap.height * scale).toInt().coerceIn(1, inputHeight)
+        val resized = Bitmap.createScaledBitmap(bitmap, resizedWidth, resizedHeight, true)
+        val pixels = IntArray(resizedWidth * resizedHeight)
+        resized.getPixels(pixels, 0, resizedWidth, 0, 0, resizedWidth, resizedHeight)
         if (resized !== bitmap) resized.recycle()
 
         val input = ByteBuffer.allocateDirect(inputWidth * inputHeight * 3 * 4)
             .order(ByteOrder.nativeOrder())
-        for (pixel in pixels) {
-            input.putFloat((((pixel shr 16) and 255) - 127.5f) / 127.5f)
-            input.putFloat((((pixel shr 8) and 255) - 127.5f) / 127.5f)
-            input.putFloat(((pixel and 255) - 127.5f) / 127.5f)
+        repeat(inputWidth * inputHeight * 3) { input.putFloat(0f) }
+        for (y in 0 until resizedHeight) for (x in 0 until resizedWidth) {
+            val pixel = pixels[y * resizedWidth + x]
+            val offset = (y * inputWidth + x) * 3 * 4
+            input.putFloat(offset, (((pixel shr 16) and 255) - 127.5f) / 127.5f)
+            input.putFloat(offset + 4, (((pixel shr 8) and 255) - 127.5f) / 127.5f)
+            input.putFloat(offset + 8, ((pixel and 255) - 127.5f) / 127.5f)
         }
         input.rewind()
 
@@ -61,24 +69,23 @@ fun segmentSky(context: Context, bitmap: Bitmap): SegmentationMasks {
         val output = ByteBuffer.allocateDirect(outputTensor.numBytes()).order(ByteOrder.nativeOrder())
         interpreter.run(input, output)
         output.rewind()
-        val labels = ByteArray(maskWidth * maskHeight)
-        val scores = FloatArray(classCount)
-        for (pixelIndex in labels.indices) {
+        val squareLabels = ByteArray(maskWidth * maskHeight)
+        for (pixelIndex in squareLabels.indices) {
             var bestClass = 0
             var bestScore = Float.NEGATIVE_INFINITY
-            var skyScore = Float.NEGATIVE_INFINITY
             for (classIndex in 0 until classCount) {
                 val score = output.float
-                scores[classIndex] = score
                 if (score > bestScore) {
                     bestScore = score
                     bestClass = classIndex
                 }
-                if (classIndex == SKY_CLASS_ID) skyScore = score
             }
-            // Keep only confident sky pixels; later compositing also protects
-            // person-part classes identified by the separate MediaPipe model.
-            labels[pixelIndex] = if (bestClass == SKY_CLASS_ID && skyScore >= SKY_MIN_SCORE) 1 else 0
+            squareLabels[pixelIndex] = if (bestClass == SKY_CLASS_ID) 1 else 0
+        }
+        // Discard the padded portion so the returned mask keeps the source aspect ratio.
+        val labels = ByteArray(resizedWidth * resizedHeight)
+        for (y in 0 until resizedHeight) {
+            System.arraycopy(squareLabels, y * maskWidth, labels, y * resizedWidth, resizedWidth)
         }
 
         // Remove isolated single-pixel predictions without eroding broad sky areas.
@@ -99,4 +106,3 @@ fun segmentSky(context: Context, bitmap: Bitmap): SegmentationMasks {
 }
 
 private const val SKY_CLASS_ID = 2
-private const val SKY_MIN_SCORE = 0.35f
