@@ -11,6 +11,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -122,7 +123,7 @@ jobs:
           target: default
           arch: x86_64
           disable-animations: true
-          script: cd IraqiStudioAI && gradle connectedDebugAndroidTest
+          script: cd IraqiStudioAI && timeout 12m gradle connectedDebugAndroidTest --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
