@@ -34,6 +34,7 @@ jobs:
       - name: Apply updated editor source
         run: |
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/MainActivity.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/MainActivity.kt
+          cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/SegmentationEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/SegmentationEngine.kt
           cp .github/source-overrides/app/build.gradle.kts IraqiStudioAI/app/build.gradle.kts
 
       - name: Upload prepared source for inspection
