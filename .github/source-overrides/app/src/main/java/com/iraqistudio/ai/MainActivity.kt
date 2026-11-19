@@ -589,10 +589,14 @@ fun StudioScreen() {
                                         }
                                     }
                                 }
-                                Text("تغيير درجة اللون: ${regionHue.toInt()}°", color = Color.White)
-                                Slider(value = regionHue, onValueChange = { regionHue = it }, valueRange = -180f..180f)
-                                Text("قوة التشبع للمنطقة: ${(regionSaturation * 100).toInt()}%", color = Color.White)
-                                Slider(value = regionSaturation, onValueChange = { regionSaturation = it }, valueRange = 0f..2f)
+                                if (selectedRegionName == "السماء") {
+                                    Text("إعدادات لون السماء مستقلة في لوحة استوديو السماء أعلاه.", color = Color.LightGray, fontSize = 11.sp)
+                                } else {
+                                    Text("تغيير درجة اللون: ${regionHue.toInt()}°", color = Color.White)
+                                    Slider(value = regionHue, onValueChange = { regionHue = it }, valueRange = -180f..180f)
+                                    Text("قوة التشبع للمنطقة: ${(regionSaturation * 100).toInt()}%", color = Color.White)
+                                    Slider(value = regionSaturation, onValueChange = { regionSaturation = it }, valueRange = 0f..2f)
+                                }
                                 Text("تظهر معاينة التعديل مباشرة. قناع الشخص 256×256، وقناع السماء يعتمد على نموذج ADE20K؛ قد تحتاج الحواف الدقيقة إلى تصحيح يدوي لاحقًا.", color = Color.LightGray, fontSize = 11.sp)
                             }
                             Text("جودة حفظ الصورة", color = Color.White, fontWeight = FontWeight.SemiBold)
