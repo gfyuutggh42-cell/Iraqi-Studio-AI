@@ -95,6 +95,7 @@ jobs:
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/VideoPortraitEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/VideoPortraitEngine.kt
           mkdir -p IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai
           cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt
+          cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/VideoPortraitEngineInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/VideoPortraitEngineInstrumentedTest.kt
           cp .github/source-overrides/app/build.gradle.kts IraqiStudioAI/app/build.gradle.kts
 
       - name: Upload prepared source for inspection
