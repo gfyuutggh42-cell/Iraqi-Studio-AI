@@ -22,6 +22,7 @@ android {
         jvmTarget = "17"
     }
     buildFeatures { compose = true }
+    androidResources { noCompress += "tflite" }
 }
 
 dependencies {
