@@ -49,6 +49,9 @@ import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
 import androidx.media3.ui.PlayerView
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
 
@@ -76,7 +79,11 @@ private fun enhanceForExport(
     contrast: Float,
     saturation: Float,
     clarity: Float,
-    maxDimension: Int
+    maxDimension: Int,
+    regionMasks: SegmentationMasks? = null,
+    selectedRegion: Int = -1,
+    regionHue: Float = 0f,
+    regionSaturation: Float = 1f
 ): Bitmap {
     val scale = if (maxDimension <= 0) 1f else min(1f, maxDimension.toFloat() / max(source.width, source.height).toFloat())
     val width = max(1, (source.width * scale).toInt())
@@ -99,6 +106,19 @@ private fun enhanceForExport(
         val g = (((gray + (g0 - gray) * s - 128f) * c) + 128f + b).toInt().coerceIn(0, 255)
         val bl = (((gray + (b0 - gray) * s - 128f) * c) + 128f + b).toInt().coerceIn(0, 255)
         toned[i] = (color and -0x1000000) or (r shl 16) or (g shl 8) or bl
+    }
+    if (regionMasks != null && selectedRegion >= 0 && (regionHue != 0f || regionSaturation != 1f)) {
+        for (y in 0 until height) for (x in 0 until width) {
+            val i = y * width + x
+            if (regionMasks.categoryAt(x, y, width, height) == selectedRegion) {
+                val pixel = toned[i]
+                val hsv = FloatArray(3)
+                android.graphics.Color.colorToHSV(pixel, hsv)
+                hsv[0] = (hsv[0] + regionHue + 360f) % 360f
+                hsv[1] = (hsv[1] * regionSaturation).coerceIn(0f, 1f)
+                toned[i] = android.graphics.Color.HSVToColor((pixel ushr 24) and 255, hsv)
+            }
+        }
     }
     val amount = (clarity.coerceIn(0f, 100f) / 100f) * 0.65f
     if (amount > 0f && width > 2 && height > 2) {
@@ -145,6 +165,13 @@ fun StudioScreen() {
     var saturation by remember { mutableFloatStateOf(1f) }
     var clarity by remember { mutableFloatStateOf(35f) }
     var photoResolution by remember { mutableStateOf("1080p") }
+    var segmentationMasks by remember { mutableStateOf<SegmentationMasks?>(null) }
+    var selectedRegionName by remember { mutableStateOf("الملابس") }
+    var regionHue by remember { mutableFloatStateOf(0f) }
+    var regionSaturation by remember { mutableFloatStateOf(1f) }
+    var isAnalyzing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val regionOptions = listOf("الخلفية" to 0, "الشعر" to 1, "بشرة الجسم" to 2, "الوجه" to 3, "الملابس" to 4, "الإكسسوارات" to 5)
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         videoUri = uri
@@ -163,6 +190,10 @@ fun StudioScreen() {
                 saturation = 1f
                 clarity = 35f
                 photoResolution = "1080p"
+                segmentationMasks = null
+                selectedRegionName = "الملابس"
+                regionHue = 0f
+                regionSaturation = 1f
                 if (photoBitmap == null) Toast.makeText(context, "تعذر فتح الصورة", Toast.LENGTH_LONG).show()
             } catch (error: Exception) {
                 Toast.makeText(context, "تعذر فتح الصورة: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
@@ -195,7 +226,8 @@ fun StudioScreen() {
         if (destination != null && bitmap != null) {
             try {
                 val maxDimension = when (photoResolution) { "720p" -> 1280; "1080p" -> 1920; "2K" -> 2560; else -> 0 }
-                val enhanced = enhanceForExport(bitmap, brightness, contrast, saturation, clarity, maxDimension)
+                val selectedRegionId = regionOptions.firstOrNull { it.first == selectedRegionName }?.second ?: 4
+                val enhanced = enhanceForExport(bitmap, brightness, contrast, saturation, clarity, maxDimension, segmentationMasks, selectedRegionId, regionHue, regionSaturation)
                 context.contentResolver.openOutputStream(destination)?.use { output ->
                     if (!enhanced.compress(Bitmap.CompressFormat.JPEG, 95, output)) error("تعذر إنشاء ملف الصورة")
                 } ?: error("تعذر فتح مكان الحفظ")
@@ -248,7 +280,7 @@ fun StudioScreen() {
                         }
                     }
                 },
-                actions = { Text("0.3", color = Color.LightGray, modifier = Modifier.padding(end = 16.dp)) },
+                actions = { Text("0.5", color = Color.LightGray, modifier = Modifier.padding(end = 16.dp)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)
             )
         }) { padding ->
@@ -383,6 +415,46 @@ fun StudioScreen() {
                             Slider(value = saturation, onValueChange = { saturation = it }, valueRange = 0f..1.8f, enabled = photoBitmap != null)
                             Text("وضوح التفاصيل  ${clarity.toInt()}%", color = Color.White)
                             Slider(value = clarity, onValueChange = { clarity = it }, valueRange = 0f..100f, enabled = photoBitmap != null)
+                            Divider(color = Color.DarkGray)
+                            Text("العزل الذكي للمناطق", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("حلّل الصورة لتحديد الشعر والبشرة والوجه والملابس والخلفية، ثم غيّر لون المنطقة المختارة وحدها.", color = Color.LightGray, fontSize = 12.sp)
+                            Button(
+                                onClick = {
+                                    val source = photoBitmap
+                                    if (source != null) scope.launch {
+                                        isAnalyzing = true
+                                        try {
+                                            segmentationMasks = withContext(Dispatchers.Default) { segmentPhoto(context, source) }
+                                            Toast.makeText(context, "اكتمل تحليل المناطق بالذكاء الاصطناعي", Toast.LENGTH_LONG).show()
+                                        } catch (error: Exception) {
+                                            segmentationMasks = null
+                                            Toast.makeText(context, "تعذر تحليل الصورة: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+                                        } finally { isAnalyzing = false }
+                                    }
+                                },
+                                enabled = photoBitmap != null && !isAnalyzing,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
+                            ) { Text(if (isAnalyzing) "جارٍ تحليل الصورة..." else if (segmentationMasks == null) "تحليل الصورة وعزل المناطق" else "إعادة تحليل الصورة") }
+                            if (segmentationMasks != null) {
+                                Text("اختر المنطقة التي تريد تعديل لونها:", color = Color.White)
+                                regionOptions.chunked(3).forEach { group ->
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        group.forEach { (label, _) ->
+                                            FilterChip(
+                                                selected = selectedRegionName == label,
+                                                onClick = { selectedRegionName = label },
+                                                label = { Text(label, fontSize = 10.sp) }
+                                            )
+                                        }
+                                    }
+                                }
+                                Text("تغيير درجة اللون: ${regionHue.toInt()}°", color = Color.White)
+                                Slider(value = regionHue, onValueChange = { regionHue = it }, valueRange = -180f..180f)
+                                Text("قوة التشبع للمنطقة: ${(regionSaturation * 100).toInt()}%", color = Color.White)
+                                Slider(value = regionSaturation, onValueChange = { regionSaturation = it }, valueRange = 0f..2f)
+                                Text("سيُطبّق تعديل اللون على المنطقة التي تعرّف عليها النموذج فقط عند الحفظ. دقة النموذج محدودة بدقة 256×256، وقد تحتاج الحواف إلى تحسين.", color = Color.LightGray, fontSize = 11.sp)
+                            }
                             Text("جودة حفظ الصورة", color = Color.White, fontWeight = FontWeight.SemiBold)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 listOf("720p", "1080p", "2K", "الأصلية").forEach { option ->
@@ -397,7 +469,7 @@ fun StudioScreen() {
                     }
                     Text("أدوات إضافية مثل القصّ الدقيق والفلاتر وتنعيم البشرة وإزالة الخلفية ستُضاف بعد تنفيذها واختبارها.", color = Color.LightGray, fontSize = 12.sp)
                 }
-                Text("Iraqi Studio AI • النسخة 0.3 التجريبية", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Text("Iraqi Studio AI • النسخة 0.5 التجريبية", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
             }
         }
     }
