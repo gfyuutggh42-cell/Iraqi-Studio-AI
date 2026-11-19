@@ -1,0 +1,27 @@
+name: Extract Iraqi Studio AI source
+
+on:
+  push:
+    branches:
+      - extract-source-for-review
+    paths:
+      - '.github/workflows/extract-source.yml'
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Extract source archive
+        run: |
+          unzip -q IraqiStudioAI-source.zip -d extracted
+          test -f extracted/IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/MainActivity.kt
+          find extracted/IraqiStudioAI -maxdepth 4 -type f | sort
+      - name: Upload extracted project for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: IraqiStudioAI-extracted-source
+          path: extracted/IraqiStudioAI/
+          if-no-files-found: error
+          retention-days: 3
