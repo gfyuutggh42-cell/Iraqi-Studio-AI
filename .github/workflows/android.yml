@@ -68,7 +68,26 @@ jobs:
           interpreter.invoke()
           result = interpreter.get_tensor(out["index"])
           print("INFERENCE OUTPUT:", result.shape, result.dtype, "classes:", np.unique(result)[:20])
-          assert result.shape[0] == 1 and result.size >= 512 * 512, "Unexpected segmentation output"
+          assert out["shape"].tolist() == [1, 512, 512], "Unexpected segmentation output shape"
+          assert out["dtype"] == np.int32, "Unexpected segmentation output type"
+          assert result.shape == (1, 512, 512), "Unexpected inference output"
+          assert int(result.min()) >= 0 and int(result.max()) < 150, "ADE20K class ids out of range"
+          # A simple blue upper half / green lower half sanity image verifies
+          # that the model can emit ADE20K's explicit sky class (id 2).
+          scene = np.zeros(inp["shape"], dtype=np.float32)
+          scene[:, :256, :, 0] = 125.0
+          scene[:, :256, :, 1] = 185.0
+          scene[:, :256, :, 2] = 235.0
+          scene[:, 256:, :, 0] = 35.0
+          scene[:, 256:, :, 1] = 125.0
+          scene[:, 256:, :, 2] = 45.0
+          interpreter.set_tensor(inp["index"], scene)
+          interpreter.invoke()
+          scene_result = interpreter.get_tensor(out["index"])[0]
+          sky_top = int(np.count_nonzero(scene_result[:220, :] == 2))
+          sky_bottom = int(np.count_nonzero(scene_result[292:, :] == 2))
+          print("SKY CLASS SANITY:", "top=", sky_top, "bottom=", sky_bottom)
+          assert sky_top > 10000 and sky_top > sky_bottom, "ADE20K sky class sanity test failed"
           PY
 
       - name: Apply updated editor source
