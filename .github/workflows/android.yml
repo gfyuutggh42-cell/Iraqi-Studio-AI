@@ -92,6 +92,7 @@ jobs:
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/MainActivity.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/MainActivity.kt
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/SegmentationEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/SegmentationEngine.kt
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/SkySegmentationEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/SkySegmentationEngine.kt
+          cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/VideoPortraitEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/VideoPortraitEngine.kt
           mkdir -p IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai
           cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt
           cp .github/source-overrides/app/build.gradle.kts IraqiStudioAI/app/build.gradle.kts
