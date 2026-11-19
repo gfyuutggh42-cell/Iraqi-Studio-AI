@@ -514,14 +514,21 @@ fun StudioScreen() {
                                         }
                                     }
                                     if (skyPanelOpen) {
-                                        Text(if (skySegmentationMasks != null) "تم تحليل قناع السماء؛ اختر السماء من المناطق لتطبيق هذه الإعدادات عليها فقط." else "أدوات اللوحة جاهزة، لكن قناع السماء لم يُعتمد بعد؛ لن نغيّر أي جزء آخر من الصورة.", color = if (skySegmentationMasks != null) Mint else Color(0xFFFFC66D), fontSize = 11.sp)
+                                        Text(if (skySegmentationMasks != null) "تم تحليل قناع السماء. هذه الإعدادات تؤثر على السماء وحدها." else "قناع السماء لم يكتمل بعد؛ الأدوات ستبقى متوقفة لحماية بقية الصورة.", color = if (skySegmentationMasks != null) Mint else Color(0xFFFFC66D), fontSize = 11.sp)
+                                        Button(onClick = { selectedRegionName = "السماء" }, enabled = skySegmentationMasks != null, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF285B79), contentColor = Color.White)) {
+                                            Text(if (selectedRegionName == "السماء") "السماء محددة للتعديل" else "اختيار السماء للتعديل")
+                                        }
+                                        Text("تغيير لون السماء: ${regionHue.toInt()}°", color = Color.White)
+                                        Slider(value = regionHue, onValueChange = { regionHue = it }, valueRange = -180f..180f, enabled = skySegmentationMasks != null)
+                                        Text("تشبع لون السماء: ${(regionSaturation * 100).toInt()}%", color = Color.White)
+                                        Slider(value = regionSaturation, onValueChange = { regionSaturation = it }, valueRange = 0f..2f, enabled = skySegmentationMasks != null)
                                         Text("إضاءة السماء: ${(skyBrightness * 100).toInt()}", color = Color.White)
                                         Slider(value = skyBrightness, onValueChange = { skyBrightness = it }, valueRange = -0.5f..0.5f, enabled = skySegmentationMasks != null)
                                         Text("تباين السماء: ${(skyContrast * 100).toInt()}%", color = Color.White)
                                         Slider(value = skyContrast, onValueChange = { skyContrast = it }, valueRange = 0.5f..1.8f, enabled = skySegmentationMasks != null)
                                         Text("دفء اللون / برودته: ${(skyTemperature * 100).toInt()}", color = Color.White)
                                         Slider(value = skyTemperature, onValueChange = { skyTemperature = it }, valueRange = -1f..1f, enabled = skySegmentationMasks != null)
-                                        Text("درجة اللون والتشبع تُضبطان من أدوات المنطقة بعد اختيار السماء.", color = Color.LightGray, fontSize = 11.sp)
+                                        Text("يمكنك تغيير اللون والتشبع والسطوع والتباين والدفء دون المساس ببقية الصورة.", color = Color.LightGray, fontSize = 11.sp)
                                     }
                                 }
                             }
