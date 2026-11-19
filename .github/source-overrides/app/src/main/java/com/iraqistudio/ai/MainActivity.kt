@@ -43,6 +43,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.Effects
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
@@ -474,7 +476,8 @@ fun StudioScreen() {
                                                         mainHandler.post { isExporting = false; output.delete(); Toast.makeText(context, "فشل التصدير: ${exportException.localizedMessage}", Toast.LENGTH_LONG).show() }
                                                     }
                                                 }).build()
-                                                transformer.start(input, output.absolutePath)
+                                                val editedItem = EditedMediaItem.Builder(input).setEffects(Effects(emptyList(), buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur))).build()
+                                                transformer.start(editedItem, output.absolutePath)
                                             } catch (error: Exception) {
                                                 isExporting = false; output.delete()
                                                 Toast.makeText(context, "تعذر بدء التصدير: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
