@@ -96,13 +96,11 @@ fun makePortraitBlurFrame(
         for (x in 0 until width) {
             val index = y * width + x
             var covered = 0
-            var samples = 0
             for (dy in -1..1) {
                 val ny = (y + dy).coerceIn(0, height - 1)
                 for (dx in -1..1) {
                     val nx = (x + dx).coerceIn(0, width - 1)
                     covered += foreground[ny * width + nx].toInt()
-                    samples++
                 }
             }
             val centerIsPerson = foreground[index].toInt() == 1
