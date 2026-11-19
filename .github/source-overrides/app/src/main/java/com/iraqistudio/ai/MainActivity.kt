@@ -86,7 +86,7 @@ private fun makeSelectivePreview(
 ): Bitmap {
     val pixels = IntArray(source.width * source.height)
     source.getPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
-    if (hueShift != 0f || saturationScale != 1f) {
+    if (hueShift != 0f || saturationScale != 1f || (selectedRegion == 6 && (skyBrightness != 0f || skyContrast != 1f || skyTemperature != 0f))) {
         val hsv = FloatArray(3)
         for (y in 0 until source.height) for (x in 0 until source.width) {
             val i = y * source.width + x
@@ -153,7 +153,7 @@ private fun enhanceForExport(
         val bl = (((gray + (b0 - gray) * s - 128f) * c) + 128f + b).toInt().coerceIn(0, 255)
         toned[i] = (color and -0x1000000) or (r shl 16) or (g shl 8) or bl
     }
-    if (regionMasks != null && selectedRegion >= 0 && (regionHue != 0f || regionSaturation != 1f)) {
+    if (regionMasks != null && selectedRegion >= 0 && (regionHue != 0f || regionSaturation != 1f || (selectedRegion == 6 && (skyBrightness != 0f || skyContrast != 1f || skyTemperature != 0f)))) {
         for (y in 0 until height) for (x in 0 until width) {
             val i = y * width + x
             val personClass = regionMasks.categoryAt(x, y, width, height)
