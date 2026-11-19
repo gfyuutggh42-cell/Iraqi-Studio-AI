@@ -61,9 +61,9 @@ jobs:
           assert inp["shape"].tolist() == [1, 512, 512, 3], "Unexpected model input shape"
           assert inp["dtype"] == np.float32, "Unexpected model input dtype"
           sample = np.zeros(inp["shape"], dtype=np.float32)
-          sample[:, :, :, 0] = 90.0
-          sample[:, :, :, 1] = 140.0
-          sample[:, :, :, 2] = 210.0
+          sample[:, :, :, 0] = 90.0 / 255.0
+          sample[:, :, :, 1] = 140.0 / 255.0
+          sample[:, :, :, 2] = 210.0 / 255.0
           interpreter.set_tensor(inp["index"], sample)
           interpreter.invoke()
           result = interpreter.get_tensor(out["index"])
@@ -75,12 +75,12 @@ jobs:
           # A simple blue upper half / green lower half sanity image verifies
           # that the model can emit ADE20K's explicit sky class (id 2).
           scene = np.zeros(inp["shape"], dtype=np.float32)
-          scene[:, :256, :, 0] = 125.0
-          scene[:, :256, :, 1] = 185.0
-          scene[:, :256, :, 2] = 235.0
-          scene[:, 256:, :, 0] = 35.0
-          scene[:, 256:, :, 1] = 125.0
-          scene[:, 256:, :, 2] = 45.0
+          scene[:, :256, :, 0] = 125.0 / 255.0
+          scene[:, :256, :, 1] = 185.0 / 255.0
+          scene[:, :256, :, 2] = 235.0 / 255.0
+          scene[:, 256:, :, 0] = 35.0 / 255.0
+          scene[:, 256:, :, 1] = 125.0 / 255.0
+          scene[:, 256:, :, 2] = 45.0 / 255.0
           interpreter.set_tensor(inp["index"], scene)
           interpreter.invoke()
           scene_result = interpreter.get_tensor(out["index"])[0]
