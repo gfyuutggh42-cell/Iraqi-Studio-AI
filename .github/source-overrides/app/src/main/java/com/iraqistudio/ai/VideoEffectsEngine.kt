@@ -7,6 +7,7 @@ import androidx.media3.effect.Contrast
 import androidx.media3.effect.GaussianBlur
 import androidx.media3.effect.HslAdjustment
 import androidx.media3.effect.RgbFilter
+import androidx.media3.effect.RgbMatrix
 
 /** GPU video effects shared by ExoPlayer preview and Transformer export.
  * Blur intentionally affects the complete frame, not a person-only mask.
@@ -20,7 +21,16 @@ fun buildVideoEffects(preset: String, brightness: Float, saturation: Float, blur
             effects += HslAdjustment.Builder().adjustSaturation(12f).adjustLightness(-2f).build()
         }
         "أبيض وأسود" -> effects += RgbFilter.createGrayscaleFilter()
-        "سيبيا" -> effects += RgbFilter.createSepiaFilter()
+        "سيبيا" -> {
+            // Media3 1.5.1 has no built-in sepia helper; use its supported RGB matrix effect.
+            val sepiaMatrix = floatArrayOf(
+                0.393f, 0.349f, 0.272f, 0f,
+                0.769f, 0.686f, 0.534f, 0f,
+                0.189f, 0.168f, 0.131f, 0f,
+                0f, 0f, 0f, 1f
+            )
+            effects += RgbMatrix { _, _ -> sepiaMatrix }
+        }
         "معكوس" -> effects += RgbFilter.createInvertedFilter()
     }
     if (brightness != 0f) effects += Brightness(brightness.coerceIn(-1f, 1f))
