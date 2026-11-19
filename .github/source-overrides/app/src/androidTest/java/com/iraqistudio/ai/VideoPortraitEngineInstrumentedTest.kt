@@ -1,5 +1,6 @@
 package com.iraqistudio.ai
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -18,21 +19,24 @@ class VideoPortraitEngineInstrumentedTest {
             BitmapFactory.decodeStream(it)
         } ?: error("تعذر تحميل صورة الاختبار")
 
-        VideoPersonSegmenter(appContext).use { segmenter ->
-            val mask = segmenter.segmentFrame(source, 1000L)
-            assertTrue(mask.width > 0)
-            assertTrue(mask.height > 0)
-            assertEquals(mask.width * mask.height, mask.labels.size)
+        try {
+            VideoPersonSegmenter(appContext).use { segmenter ->
+                val mask = segmenter.segmentFrame(source, 1000L)
+                assertTrue(mask.width > 0)
+                assertTrue(mask.height > 0)
+                assertEquals(mask.width * mask.height, mask.labels.size)
 
-            val output = makePortraitBlurFrame(source, mask, 12)
-            try {
-                assertEquals(source.width, output.width)
-                assertEquals(source.height, output.height)
-                assertEquals(BitmapFactory.Config.ARGB_8888, output.config)
-            } finally {
-                output.recycle()
+                val output = makePortraitBlurFrame(source, mask, 12)
+                try {
+                    assertEquals(source.width, output.width)
+                    assertEquals(source.height, output.height)
+                    assertEquals(Bitmap.Config.ARGB_8888, output.config)
+                } finally {
+                    output.recycle()
+                }
             }
+        } finally {
+            source.recycle()
         }
-        source.recycle()
     }
 }
