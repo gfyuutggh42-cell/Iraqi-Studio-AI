@@ -24,6 +24,13 @@ jobs:
       - name: Extract Android project
         run: unzip -q IraqiStudioAI-source.zip
 
+      - name: Download and verify on-device segmentation model
+        working-directory: IraqiStudioAI
+        run: |
+          mkdir -p app/src/main/assets
+          curl -fL --retry 3 "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite" -o app/src/main/assets/selfie_multiclass.tflite
+          echo "c6748b1253a99067ef71f7e26ca71096cd449baefa8f101900ea23016507e0e0  app/src/main/assets/selfie_multiclass.tflite" | sha256sum -c -
+
       - name: Apply updated editor source
         run: |
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/MainActivity.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/MainActivity.kt
@@ -32,7 +39,7 @@ jobs:
       - name: Upload prepared source for inspection
         uses: actions/upload-artifact@v4
         with:
-          name: IraqiStudioAI-v0.4-source
+          name: IraqiStudioAI-v0.5-source
           path: IraqiStudioAI/
           if-no-files-found: error
           retention-days: 3
@@ -49,6 +56,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Iraqi-Studio-AI-APK-v0.4
+          name: Iraqi-Studio-AI-APK-v0.5
           path: IraqiStudioAI/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
