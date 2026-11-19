@@ -11,8 +11,8 @@ android {
         applicationId = "com.iraqistudio.ai"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 6
+        versionName = "0.6.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -38,5 +38,6 @@ dependencies {
     implementation("androidx.media3:media3-transformer:1.5.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("com.google.mediapipe:tasks-vision:1.1.1")
+    implementation("org.tensorflow:tensorflow-lite:2.17.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
