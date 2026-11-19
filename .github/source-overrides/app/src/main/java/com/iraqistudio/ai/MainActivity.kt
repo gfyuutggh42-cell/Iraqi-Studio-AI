@@ -82,11 +82,13 @@ private fun makeSelectivePreview(
     saturationScale: Float,
     skyBrightness: Float = 0f,
     skyContrast: Float = 1f,
-    skyTemperature: Float = 0f
+    skyTemperature: Float = 0f,
+    skyHue: Float = 0f,
+    skySaturation: Float = 1f
 ): Bitmap {
     val pixels = IntArray(source.width * source.height)
     source.getPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
-    if (hueShift != 0f || saturationScale != 1f || (selectedRegion == 6 && (skyBrightness != 0f || skyContrast != 1f || skyTemperature != 0f))) {
+    if (hueShift != 0f || saturationScale != 1f || (selectedRegion == 6 && (skyBrightness != 0f || skyContrast != 1f || skyTemperature != 0f || skyHue != 0f || skySaturation != 1f))) {
         val hsv = FloatArray(3)
         for (y in 0 until source.height) for (x in 0 until source.width) {
             val i = y * source.width + x
@@ -103,8 +105,10 @@ private fun makeSelectivePreview(
                     pixels[i] = (original and -0x1000000) or (r.toInt().coerceIn(0,255) shl 16) or (g.toInt().coerceIn(0,255) shl 8) or b.toInt().coerceIn(0,255)
                 }
                 android.graphics.Color.colorToHSV(pixels[i], hsv)
-                hsv[0] = (hsv[0] + hueShift + 360f) % 360f
-                hsv[1] = (hsv[1] * saturationScale).coerceIn(0f, 1f)
+                val activeHue = if (selectedRegion == 6) skyHue else hueShift
+                val activeSaturation = if (selectedRegion == 6) skySaturation else saturationScale
+                hsv[0] = (hsv[0] + activeHue + 360f) % 360f
+                hsv[1] = (hsv[1] * activeSaturation).coerceIn(0f, 1f)
                 pixels[i] = android.graphics.Color.HSVToColor((pixels[i] ushr 24) and 255, hsv)
             }
         }
@@ -129,7 +133,9 @@ private fun enhanceForExport(
     regionSaturation: Float = 1f,
     skyBrightness: Float = 0f,
     skyContrast: Float = 1f,
-    skyTemperature: Float = 0f
+    skyTemperature: Float = 0f,
+    skyHue: Float = 0f,
+    skySaturation: Float = 1f
 ): Bitmap {
     val scale = if (maxDimension <= 0) 1f else min(1f, maxDimension.toFloat() / max(source.width, source.height).toFloat())
     val width = max(1, (source.width * scale).toInt())
@@ -153,7 +159,7 @@ private fun enhanceForExport(
         val bl = (((gray + (b0 - gray) * s - 128f) * c) + 128f + b).toInt().coerceIn(0, 255)
         toned[i] = (color and -0x1000000) or (r shl 16) or (g shl 8) or bl
     }
-    if (regionMasks != null && selectedRegion >= 0 && (regionHue != 0f || regionSaturation != 1f || (selectedRegion == 6 && (skyBrightness != 0f || skyContrast != 1f || skyTemperature != 0f)))) {
+    if (regionMasks != null && selectedRegion >= 0 && (regionHue != 0f || regionSaturation != 1f || (selectedRegion == 6 && (skyBrightness != 0f || skyContrast != 1f || skyTemperature != 0f || skyHue != 0f || skySaturation != 1f)))) {
         for (y in 0 until height) for (x in 0 until width) {
             val i = y * width + x
             val personClass = regionMasks.categoryAt(x, y, width, height)
@@ -171,8 +177,10 @@ private fun enhanceForExport(
                 val pixel = toned[i]
                 val hsv = FloatArray(3)
                 android.graphics.Color.colorToHSV(pixel, hsv)
-                hsv[0] = (hsv[0] + regionHue + 360f) % 360f
-                hsv[1] = (hsv[1] * regionSaturation).coerceIn(0f, 1f)
+                val activeHue = if (selectedRegion == 6) skyHue else regionHue
+                val activeSaturation = if (selectedRegion == 6) skySaturation else regionSaturation
+                hsv[0] = (hsv[0] + activeHue + 360f) % 360f
+                hsv[1] = (hsv[1] * activeSaturation).coerceIn(0f, 1f)
                 toned[i] = android.graphics.Color.HSVToColor((pixel ushr 24) and 255, hsv)
             }
         }
@@ -232,16 +240,18 @@ fun StudioScreen() {
     var skyBrightness by remember { mutableFloatStateOf(0f) }
     var skyContrast by remember { mutableFloatStateOf(1f) }
     var skyTemperature by remember { mutableFloatStateOf(0f) }
+    var skyHue by remember { mutableFloatStateOf(0f) }
+    var skySaturation by remember { mutableFloatStateOf(1f) }
     var isAnalyzing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val regionOptions = listOf("الخلفية" to 0, "الشعر" to 1, "بشرة الجسم" to 2, "الوجه" to 3, "الملابس" to 4, "الإكسسوارات" to 5, "السماء" to 6)
-    LaunchedEffect(photoBitmap, segmentationMasks, skySegmentationMasks, selectedRegionName, regionHue, regionSaturation, skyBrightness, skyContrast, skyTemperature) {
+    LaunchedEffect(photoBitmap, segmentationMasks, skySegmentationMasks, selectedRegionName, regionHue, regionSaturation, skyBrightness, skyContrast, skyTemperature, skyHue, skySaturation) {
         val source = photoBitmap
         val masks = segmentationMasks
         if (source != null && masks != null) {
             val regionId = regionOptions.firstOrNull { it.first == selectedRegionName }?.second ?: 4
             val generated = withContext(Dispatchers.Default) {
-                makeSelectivePreview(source, masks, skySegmentationMasks, regionId, regionHue, regionSaturation, skyBrightness, skyContrast, skyTemperature)
+                makeSelectivePreview(source, masks, skySegmentationMasks, regionId, regionHue, regionSaturation, skyBrightness, skyContrast, skyTemperature, skyHue, skySaturation)
             }
             selectivePreview = generated
         } else {
@@ -276,6 +286,8 @@ fun StudioScreen() {
                 skyBrightness = 0f
                 skyContrast = 1f
                 skyTemperature = 0f
+                skyHue = 0f
+                skySaturation = 1f
                 if (photoBitmap == null) Toast.makeText(context, "تعذر فتح الصورة", Toast.LENGTH_LONG).show()
             } catch (error: Exception) {
                 Toast.makeText(context, "تعذر فتح الصورة: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
@@ -309,7 +321,7 @@ fun StudioScreen() {
             try {
                 val maxDimension = when (photoResolution) { "720p" -> 1280; "1080p" -> 1920; "2K" -> 2560; else -> 0 }
                 val selectedRegionId = regionOptions.firstOrNull { it.first == selectedRegionName }?.second ?: 4
-                val enhanced = enhanceForExport(bitmap, brightness, contrast, saturation, clarity, maxDimension, segmentationMasks, skySegmentationMasks, selectedRegionId, regionHue, regionSaturation, skyBrightness, skyContrast, skyTemperature)
+                val enhanced = enhanceForExport(bitmap, brightness, contrast, saturation, clarity, maxDimension, segmentationMasks, skySegmentationMasks, selectedRegionId, regionHue, regionSaturation, skyBrightness, skyContrast, skyTemperature, skyHue, skySaturation)
                 context.contentResolver.openOutputStream(destination)?.use { output ->
                     if (!enhanced.compress(Bitmap.CompressFormat.JPEG, 95, output)) error("تعذر إنشاء ملف الصورة")
                 } ?: error("تعذر فتح مكان الحفظ")
@@ -518,10 +530,10 @@ fun StudioScreen() {
                                         Button(onClick = { selectedRegionName = "السماء" }, enabled = skySegmentationMasks != null, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF285B79), contentColor = Color.White)) {
                                             Text(if (selectedRegionName == "السماء") "السماء محددة للتعديل" else "اختيار السماء للتعديل")
                                         }
-                                        Text("تغيير لون السماء: ${regionHue.toInt()}°", color = Color.White)
-                                        Slider(value = regionHue, onValueChange = { regionHue = it }, valueRange = -180f..180f, enabled = skySegmentationMasks != null)
-                                        Text("تشبع لون السماء: ${(regionSaturation * 100).toInt()}%", color = Color.White)
-                                        Slider(value = regionSaturation, onValueChange = { regionSaturation = it }, valueRange = 0f..2f, enabled = skySegmentationMasks != null)
+                                        Text("تغيير لون السماء: ${skyHue.toInt()}°", color = Color.White)
+                                        Slider(value = skyHue, onValueChange = { skyHue = it }, valueRange = -180f..180f, enabled = skySegmentationMasks != null)
+                                        Text("تشبع لون السماء: ${(skySaturation * 100).toInt()}%", color = Color.White)
+                                        Slider(value = skySaturation, onValueChange = { skySaturation = it }, valueRange = 0f..2f, enabled = skySegmentationMasks != null)
                                         Text("إضاءة السماء: ${(skyBrightness * 100).toInt()}", color = Color.White)
                                         Slider(value = skyBrightness, onValueChange = { skyBrightness = it }, valueRange = -0.5f..0.5f, enabled = skySegmentationMasks != null)
                                         Text("تباين السماء: ${(skyContrast * 100).toInt()}%", color = Color.White)
