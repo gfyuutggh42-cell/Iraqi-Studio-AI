@@ -44,6 +44,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.ExportException
@@ -221,6 +222,7 @@ fun StudioScreen() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var activeTab by remember { mutableStateOf("video") }
     var videoUri by remember { mutableStateOf<Uri?>(null) }
+    var videoUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var durationMs by remember { mutableLongStateOf(0L) }
     var startSeconds by remember { mutableFloatStateOf(0f) }
     var endSeconds by remember { mutableFloatStateOf(0f) }
@@ -268,9 +270,19 @@ fun StudioScreen() {
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         videoUri = uri
+        videoUris = if (uri != null) listOf(uri) else emptyList()
         durationMs = 0L
         startSeconds = 0f
         endSeconds = 0f
+    }
+    val multiVideoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isNotEmpty()) {
+            videoUris = (videoUris + uris).distinct()
+            if (videoUri == null) videoUri = videoUris.firstOrNull()
+            durationMs = 0L
+            startSeconds = 0f
+            endSeconds = 0f
+        }
     }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
@@ -423,6 +435,82 @@ fun StudioScreen() {
                                 Text("اختر فيديو للبدء", color = Color.White, fontWeight = FontWeight.SemiBold)
                                 Text("ستظهر المعاينة هنا", color = Color.Gray, fontSize = 12.sp)
                             }
+                        }
+                    }
+                    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("ترتيب ودمج المقاطع", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text("أضف أكثر من فيديو، غيّر ترتيبها، ثم صدّرها في ملف واحد متتابع.", color = Color.LightGray, fontSize = 12.sp)
+                            OutlinedButton(onClick = { multiVideoPicker.launch("video/*") }, modifier = Modifier.fillMaxWidth(), enabled = !isExporting) {
+                                Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("إضافة مقاطع فيديو")
+                            }
+                            if (videoUris.isEmpty()) Text("لم تضف مقاطع إضافية بعد.", color = Color.Gray, fontSize = 12.sp)
+                            videoUris.forEachIndexed { index, uri ->
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("${index + 1}. ${uri.lastPathSegment?.takeLast(24) ?: "مقطع فيديو"}", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
+                                    TextButton(onClick = {
+                                        if (index > 0) {
+                                            val updated = videoUris.toMutableList()
+                                            val item = updated.removeAt(index)
+                                            updated.add(index - 1, item)
+                                            videoUris = updated
+                                            videoUri = updated.firstOrNull()
+                                        }
+                                    }, enabled = index > 0 && !isExporting) { Text("↑") }
+                                    TextButton(onClick = {
+                                        if (index < videoUris.lastIndex) {
+                                            val updated = videoUris.toMutableList()
+                                            val item = updated.removeAt(index)
+                                            updated.add(index + 1, item)
+                                            videoUris = updated
+                                            videoUri = updated.firstOrNull()
+                                        }
+                                    }, enabled = index < videoUris.lastIndex && !isExporting) { Text("↓") }
+                                    TextButton(onClick = {
+                                        val updated = videoUris.toMutableList().also { it.removeAt(index) }
+                                        videoUris = updated
+                                        videoUri = updated.firstOrNull()
+                                    }, enabled = !isExporting) { Text("حذف", color = Color(0xFFFF8A8A)) }
+                                }
+                            }
+                            Button(
+                                onClick = {
+                                    if (videoUris.size < 2) {
+                                        Toast.makeText(context, "أضف مقطعين على الأقل للدمج", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        isExporting = true
+                                        player?.pause()
+                                        val output = File(context.cacheDir, "iraqi_studio_join_${System.currentTimeMillis()}.mp4")
+                                        val items = videoUris.map { uri ->
+                                            EditedMediaItem.Builder(MediaItem.fromUri(uri))
+                                                .setEffects(Effects(emptyList(), buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur)))
+                                                .build()
+                                        }
+                                        val sequence = EditedMediaItemSequence.withAudioAndVideoFrom(items)
+                                        val composition = Composition.Builder(sequence).build()
+                                        val mainHandler = Handler(Looper.getMainLooper())
+                                        try {
+                                            val transformer = Transformer.Builder(context).addListener(object : Transformer.Listener {
+                                                override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                                                    mainHandler.post { isExporting = false; pendingExportFile = output; saveVideoLauncher.launch("IraqiStudioAI-merged.mp4") }
+                                                }
+                                                override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
+                                                    mainHandler.post { isExporting = false; output.delete(); Toast.makeText(context, "فشل دمج المقاطع: ${exportException.localizedMessage}", Toast.LENGTH_LONG).show() }
+                                                }
+                                            }).build()
+                                            transformer.start(composition, output.absolutePath)
+                                        } catch (error: Exception) {
+                                            isExporting = false
+                                            output.delete()
+                                            Toast.makeText(context, "تعذر بدء الدمج: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                },
+                                enabled = videoUris.size >= 2 && !isExporting,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
+                            ) { Text(if (isExporting) "جارٍ دمج المقاطع..." else "دمج وتصدير ${videoUris.size} مقاطع") }
+                            Text("يُحافظ الدمج على مسارات الصوت الأصلية للمقاطع. الانتقالات المتداخلة غير مدعومة في محرك الدمج الحالي.", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
