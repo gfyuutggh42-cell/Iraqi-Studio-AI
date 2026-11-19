@@ -31,7 +31,7 @@ jobs:
           curl -fL --retry 3 "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite" -o app/src/main/assets/selfie_multiclass.tflite
           echo "c6748b1253a99067ef71f7e26ca71096cd449baefa8f101900ea23016507e0e0  app/src/main/assets/selfie_multiclass.tflite" | sha256sum -c -
           curl -fL --retry 3 "https://tfhub.dev/sayakpaul/lite-model/deeplabv3-mobilenetv2-ade20k/1/default/2?lite-format=tflite" -o app/src/main/assets/deeplabv3_ade20k.tflite
-          test "$(od -An -t x1 -N4 app/src/main/assets/deeplabv3_ade20k.tflite | tr -d " \\n")" = "54464c33"
+          test "$(od -An -tx1 -N4 app/src/main/assets/deeplabv3_ade20k.tflite | tr -d ' \n')" = "54464c33"
           test "$(stat -c%s app/src/main/assets/deeplabv3_ade20k.tflite)" -gt 1000000
 
       - name: Apply updated editor source
