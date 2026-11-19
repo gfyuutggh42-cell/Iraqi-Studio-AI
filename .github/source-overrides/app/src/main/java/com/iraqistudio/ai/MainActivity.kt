@@ -223,6 +223,10 @@ fun StudioScreen() {
     var startSeconds by remember { mutableFloatStateOf(0f) }
     var endSeconds by remember { mutableFloatStateOf(0f) }
     var isExporting by remember { mutableStateOf(false) }
+    var videoFilter by remember { mutableStateOf("طبيعي") }
+    var videoBrightness by remember { mutableFloatStateOf(0f) }
+    var videoSaturation by remember { mutableFloatStateOf(0f) }
+    var videoBlur by remember { mutableFloatStateOf(0f) }
     var pendingExportFile by remember { mutableStateOf<File?>(null) }
     var photoBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var selectivePreview by remember { mutableStateOf<Bitmap?>(null) }
@@ -341,6 +345,9 @@ fun StudioScreen() {
             }
         }
     }
+    LaunchedEffect(player, videoFilter, videoBrightness, videoSaturation, videoBlur) {
+        player?.setVideoEffects(buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur))
+    }
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -414,6 +421,24 @@ fun StudioScreen() {
                                 Text("اختر فيديو للبدء", color = Color.White, fontWeight = FontWeight.SemiBold)
                                 Text("ستظهر المعاينة هنا", color = Color.Gray, fontSize = 12.sp)
                             }
+                        }
+                    }
+                    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("تأثيرات الفيديو", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text("تظهر في المعاينة وتُطبّق عند التصدير.", color = Color.LightGray, fontSize = 12.sp)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf("طبيعي", "سينمائي", "أبيض وأسود", "سيبيا", "معكوس").forEach { preset ->
+                                    FilterChip(selected = videoFilter == preset, onClick = { videoFilter = preset }, label = { Text(preset, fontSize = 11.sp) })
+                                }
+                            }
+                            Text("السطوع: ${"%.0f".format(videoBrightness * 100)}%", color = Color.White)
+                            Slider(value = videoBrightness, onValueChange = { videoBrightness = it }, valueRange = -0.5f..0.5f)
+                            Text("تشبع الألوان: ${"%.0f".format(videoSaturation)}", color = Color.White)
+                            Slider(value = videoSaturation, onValueChange = { videoSaturation = it }, valueRange = -100f..100f)
+                            Text("تمويه كامل الصورة: ${"%.0f".format(videoBlur)}", color = Color.White)
+                            Slider(value = videoBlur, onValueChange = { videoBlur = it }, valueRange = 0f..12f)
+                            Text("هذا تمويه للإطار كله وليس عزل الشخص. البورتريه للفيديو ما زال قيد التطوير.", color = Mint, fontSize = 11.sp)
                         }
                     }
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
