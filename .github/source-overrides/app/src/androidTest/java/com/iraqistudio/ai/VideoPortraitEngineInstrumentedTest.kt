@@ -15,9 +15,16 @@ class VideoPortraitEngineInstrumentedTest {
     fun videoModeSegmenterProcessesTimestampedFrameAndBuildsPortraitFrame() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val appContext = instrumentation.targetContext
-        val source = instrumentation.context.assets.open("ade20k_sky_test.jpg").use {
+        val decoded = instrumentation.context.assets.open("ade20k_sky_test.jpg").use {
             BitmapFactory.decodeStream(it)
         } ?: error("تعذر تحميل صورة الاختبار")
+
+        // Keep this instrumentation smoke test deliberately small. The model
+        // itself still receives a real frame, while the pixel-compositing test
+        // avoids spending minutes processing a large photographic fixture on
+        // the software-rendered Android 10 CI emulator.
+        val source = Bitmap.createScaledBitmap(decoded, 256, 256, true)
+        if (source !== decoded) decoded.recycle()
 
         try {
             VideoPersonSegmenter(appContext).use { segmenter ->
