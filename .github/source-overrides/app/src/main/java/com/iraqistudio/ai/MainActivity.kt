@@ -72,6 +72,33 @@ private fun timeLabel(milliseconds: Long): String {
     return "%02d:%02d".format(totalSeconds / 60L, totalSeconds % 60L)
 }
 
+/** Apply the selected semantic mask to a preview bitmap without changing other pixels. */
+private fun makeSelectivePreview(
+    source: Bitmap,
+    masks: SegmentationMasks,
+    selectedRegion: Int,
+    hueShift: Float,
+    saturationScale: Float
+): Bitmap {
+    val pixels = IntArray(source.width * source.height)
+    source.getPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
+    if (hueShift != 0f || saturationScale != 1f) {
+        val hsv = FloatArray(3)
+        for (y in 0 until source.height) for (x in 0 until source.width) {
+            val i = y * source.width + x
+            if (masks.categoryAt(x, y, source.width, source.height) == selectedRegion) {
+                android.graphics.Color.colorToHSV(pixels[i], hsv)
+                hsv[0] = (hsv[0] + hueShift + 360f) % 360f
+                hsv[1] = (hsv[1] * saturationScale).coerceIn(0f, 1f)
+                pixels[i] = android.graphics.Color.HSVToColor((pixels[i] ushr 24) and 255, hsv)
+            }
+        }
+    }
+    return Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888).also {
+        it.setPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
+    }
+}
+
 /** Resize the longest side to 1920px, then apply tone and a modest clarity filter. */
 private fun enhanceForExport(
     source: Bitmap,
@@ -160,6 +187,7 @@ fun StudioScreen() {
     var isExporting by remember { mutableStateOf(false) }
     var pendingExportFile by remember { mutableStateOf<File?>(null) }
     var photoBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var selectivePreview by remember { mutableStateOf<Bitmap?>(null) }
     var brightness by remember { mutableFloatStateOf(0f) }
     var contrast by remember { mutableFloatStateOf(1f) }
     var saturation by remember { mutableFloatStateOf(1f) }
@@ -171,6 +199,19 @@ fun StudioScreen() {
     var regionSaturation by remember { mutableFloatStateOf(1f) }
     var isAnalyzing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(photoBitmap, segmentationMasks, selectedRegionName, regionHue, regionSaturation) {
+        val source = photoBitmap
+        val masks = segmentationMasks
+        if (source != null && masks != null) {
+            val regionId = regionOptions.firstOrNull { it.first == selectedRegionName }?.second ?: 4
+            val generated = withContext(Dispatchers.Default) {
+                makeSelectivePreview(source, masks, regionId, regionHue, regionSaturation)
+            }
+            selectivePreview = generated
+        } else {
+            selectivePreview = null
+        }
+    }
     val regionOptions = listOf("الخلفية" to 0, "الشعر" to 1, "بشرة الجسم" to 2, "الوجه" to 3, "الملابس" to 4, "الإكسسوارات" to 5)
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -184,6 +225,7 @@ fun StudioScreen() {
             try {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
                     photoBitmap = BitmapFactory.decodeStream(stream)
+                selectivePreview = null
                 }
                 brightness = 0f
                 contrast = 1f
@@ -390,7 +432,7 @@ fun StudioScreen() {
                                     sr * c, sg * c, (sb + sat) * c, 0f, offset,
                                     0f, 0f, 0f, 1f, 0f
                                 ))
-                                Image(bitmap = photoBitmap!!.asImageBitmap(), contentDescription = "معاينة الصورة المعدلة مباشرة", modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp), contentScale = ContentScale.Fit, colorFilter = ColorFilter.colorMatrix(previewMatrix))
+                                Image(bitmap = (selectivePreview ?: photoBitmap!!).asImageBitmap(), contentDescription = "معاينة الصورة المعدلة مباشرة", modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp), contentScale = ContentScale.Fit, colorFilter = ColorFilter.colorMatrix(previewMatrix))
                             } else {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Icon(Icons.Default.CameraAlt, null, tint = Violet, modifier = Modifier.size(52.dp))
@@ -453,7 +495,7 @@ fun StudioScreen() {
                                 Slider(value = regionHue, onValueChange = { regionHue = it }, valueRange = -180f..180f)
                                 Text("قوة التشبع للمنطقة: ${(regionSaturation * 100).toInt()}%", color = Color.White)
                                 Slider(value = regionSaturation, onValueChange = { regionSaturation = it }, valueRange = 0f..2f)
-                                Text("سيُطبّق تعديل اللون على المنطقة التي تعرّف عليها النموذج فقط عند الحفظ. دقة النموذج محدودة بدقة 256×256، وقد تحتاج الحواف إلى تحسين.", color = Color.LightGray, fontSize = 11.sp)
+                                Text("تظهر معاينة تعديل المنطقة مباشرة. دقة قناع التعرف 256×256 حاليًا؛ قد تحتاج الحواف الدقيقة إلى تحسين.", color = Color.LightGray, fontSize = 11.sp)
                             }
                             Text("جودة حفظ الصورة", color = Color.White, fontWeight = FontWeight.SemiBold)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
