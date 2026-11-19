@@ -199,6 +199,7 @@ fun StudioScreen() {
     var regionSaturation by remember { mutableFloatStateOf(1f) }
     var isAnalyzing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val regionOptions = listOf("الخلفية" to 0, "الشعر" to 1, "بشرة الجسم" to 2, "الوجه" to 3, "الملابس" to 4, "الإكسسوارات" to 5)
     LaunchedEffect(photoBitmap, segmentationMasks, selectedRegionName, regionHue, regionSaturation) {
         val source = photoBitmap
         val masks = segmentationMasks
@@ -212,7 +213,7 @@ fun StudioScreen() {
             selectivePreview = null
         }
     }
-    val regionOptions = listOf("الخلفية" to 0, "الشعر" to 1, "بشرة الجسم" to 2, "الوجه" to 3, "الملابس" to 4, "الإكسسوارات" to 5)
+
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         videoUri = uri
