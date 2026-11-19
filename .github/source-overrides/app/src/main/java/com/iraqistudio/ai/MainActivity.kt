@@ -31,6 +31,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -73,9 +75,10 @@ private fun enhanceForExport(
     brightness: Float,
     contrast: Float,
     saturation: Float,
-    clarity: Float
+    clarity: Float,
+    maxDimension: Int
 ): Bitmap {
-    val scale = min(1f, 1920f / max(source.width, source.height).toFloat())
+    val scale = if (maxDimension <= 0) 1f else min(1f, maxDimension.toFloat() / max(source.width, source.height).toFloat())
     val width = max(1, (source.width * scale).toInt())
     val height = max(1, (source.height * scale).toInt())
     val scaled = if (width != source.width || height != source.height)
@@ -141,6 +144,7 @@ fun StudioScreen() {
     var contrast by remember { mutableFloatStateOf(1f) }
     var saturation by remember { mutableFloatStateOf(1f) }
     var clarity by remember { mutableFloatStateOf(35f) }
+    var photoResolution by remember { mutableStateOf("1080p") }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         videoUri = uri
@@ -158,6 +162,7 @@ fun StudioScreen() {
                 contrast = 1f
                 saturation = 1f
                 clarity = 35f
+                photoResolution = "1080p"
                 if (photoBitmap == null) Toast.makeText(context, "تعذر فتح الصورة", Toast.LENGTH_LONG).show()
             } catch (error: Exception) {
                 Toast.makeText(context, "تعذر فتح الصورة: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
@@ -189,12 +194,13 @@ fun StudioScreen() {
         val bitmap = photoBitmap
         if (destination != null && bitmap != null) {
             try {
-                val enhanced = enhanceForExport(bitmap, brightness, contrast, saturation, clarity)
+                val maxDimension = when (photoResolution) { "720p" -> 1280; "1080p" -> 1920; "2K" -> 2560; else -> 0 }
+                val enhanced = enhanceForExport(bitmap, brightness, contrast, saturation, clarity, maxDimension)
                 context.contentResolver.openOutputStream(destination)?.use { output ->
                     if (!enhanced.compress(Bitmap.CompressFormat.JPEG, 95, output)) error("تعذر إنشاء ملف الصورة")
                 } ?: error("تعذر فتح مكان الحفظ")
                 enhanced.recycle()
-                Toast.makeText(context, "تم حفظ الصورة المحسّنة بجودة عالية (حتى 1080p)", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "تم حفظ الصورة بنجاح • ${photoResolution}", Toast.LENGTH_LONG).show()
             } catch (error: Exception) {
                 Toast.makeText(context, "تعذر حفظ الصورة: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
             }
@@ -331,10 +337,7 @@ fun StudioScreen() {
                             }
                         }
                     }
-                    Text("أدوات الفيديو القادمة", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    listOf("دمج المقاطع" to "جمع عدة فيديوهات وترتيبها", "النصوص والموسيقى" to "إضافة عناوين وموسيقى وتحكم بالصوت", "الفلاتر والتأثيرات" to "ألوان سينمائية وانتقالات وتثبيت").forEach { (title, subtitle) ->
-                        ToolCard(title, subtitle, Icons.Default.Movie)
-                    }
+                    Text("المرحلة التالية: دمج عدة مقاطع وترتيبها وإضافة النصوص والموسيقى والتأثيرات. هذه الأدوات لم تُفعّل بعد، ولن نظهرها كأنها تعمل قبل اكتمالها.", color = Color.LightGray, fontSize = 12.sp)
                 } else {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("استوديو تعديل الصور", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -345,7 +348,17 @@ fun StudioScreen() {
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp)) {
                         Box(Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 380.dp).padding(10.dp), contentAlignment = Alignment.Center) {
                             if (photoBitmap != null) {
-                                Image(bitmap = photoBitmap!!.asImageBitmap(), contentDescription = "معاينة الصورة", modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp), contentScale = ContentScale.Fit)
+                                val c = contrast.coerceIn(0.5f, 2f)
+                                val sat = saturation.coerceIn(0f, 2f)
+                                val offset = 128f * (1f - c) + brightness.coerceIn(-0.35f, 0.35f) * 255f
+                                val sr = 0.213f * (1f - sat); val sg = 0.715f * (1f - sat); val sb = 0.072f * (1f - sat)
+                                val previewMatrix = ColorMatrix(floatArrayOf(
+                                    (sr + sat) * c, sg * c, sb * c, 0f, offset,
+                                    sr * c, (sg + sat) * c, sb * c, 0f, offset,
+                                    sr * c, sg * c, (sb + sat) * c, 0f, offset,
+                                    0f, 0f, 0f, 1f, 0f
+                                ))
+                                Image(bitmap = photoBitmap!!.asImageBitmap(), contentDescription = "معاينة الصورة المعدلة مباشرة", modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp), contentScale = ContentScale.Fit, colorFilter = ColorFilter.colorMatrix(previewMatrix))
                             } else {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Icon(Icons.Default.CameraAlt, null, tint = Violet, modifier = Modifier.size(52.dp))
@@ -370,14 +383,19 @@ fun StudioScreen() {
                             Slider(value = saturation, onValueChange = { saturation = it }, valueRange = 0f..1.8f, enabled = photoBitmap != null)
                             Text("وضوح التفاصيل  ${clarity.toInt()}%", color = Color.White)
                             Slider(value = clarity, onValueChange = { clarity = it }, valueRange = 0f..100f, enabled = photoBitmap != null)
-                            Text("يُطبّق تحسين الوضوح والألوان عند التصدير. تُحفظ الصورة بأبعاد لا يتجاوز ضلعها الأطول 1920 بكسل.", color = Color.LightGray, fontSize = 12.sp)
+                            Text("جودة حفظ الصورة", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf("720p", "1080p", "2K", "الأصلية").forEach { option ->
+                                    FilterChip(selected = photoResolution == option, onClick = { photoResolution = option }, label = { Text(option, fontSize = 11.sp) }, enabled = photoBitmap != null)
+                                }
+                            }
+                            Text("المعاينة تتغير مباشرة مع الإضاءة والتباين والتشبع؛ الوضوح يُطبّق عند الحفظ. خيار الأصلية يحافظ على أبعاد الملف الأصلي.", color = Color.LightGray, fontSize = 12.sp)
                             Button(onClick = { savePhotoLauncher.launch("IraqiStudioAI-photo.jpg") }, enabled = photoBitmap != null, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Violet), shape = RoundedCornerShape(14.dp)) {
-                                Icon(Icons.Default.Brush, null); Spacer(Modifier.width(8.dp)); Text("تحسين وحفظ الصورة بجودة 1080p", fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.Brush, null); Spacer(Modifier.width(8.dp)); Text("حفظ الصورة المعدلة • $photoResolution", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
-                    ToolCard("تحسين الصور الاحترافي", "ضبط الإضاءة والتباين والألوان ووضوح التفاصيل", Icons.Default.AutoFixHigh)
-                    ToolCard("أدوات متقدمة قادمة", "تنعيم البشرة، تحرير الوجه، إزالة الخلفية والتمويه ستضاف وتختبر لاحقاً", Icons.Default.Contrast)
+                    Text("أدوات إضافية مثل القصّ الدقيق والفلاتر وتنعيم البشرة وإزالة الخلفية ستُضاف بعد تنفيذها واختبارها.", color = Color.LightGray, fontSize = 12.sp)
                 }
                 Text("Iraqi Studio AI • النسخة 0.3 التجريبية", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
             }
