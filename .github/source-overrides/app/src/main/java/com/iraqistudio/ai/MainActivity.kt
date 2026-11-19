@@ -223,6 +223,7 @@ fun StudioScreen() {
     var activeTab by remember { mutableStateOf("video") }
     var videoUri by remember { mutableStateOf<Uri?>(null) }
     var videoUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var musicUri by remember { mutableStateOf<Uri?>(null) }
     var durationMs by remember { mutableLongStateOf(0L) }
     var startSeconds by remember { mutableFloatStateOf(0f) }
     var endSeconds by remember { mutableFloatStateOf(0f) }
@@ -284,6 +285,7 @@ fun StudioScreen() {
             endSeconds = 0f
         }
     }
+    val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> musicUri = uri }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             try {
@@ -441,6 +443,13 @@ fun StudioScreen() {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("ترتيب ودمج المقاطع", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             Text("أضف أكثر من فيديو، غيّر ترتيبها، ثم صدّرها في ملف واحد متتابع.", color = Color.LightGray, fontSize = 12.sp)
+                            OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !isExporting) {
+                                Text(if (musicUri == null) "اختيار موسيقى خلفية" else "تغيير الموسيقى الخلفية")
+                            }
+                            if (musicUri != null) {
+                                Text("تم اختيار موسيقى خلفية. عند الدمج ستستبدل صوت المقاطع الأصلي لتجنب تعارض صيغ الصوت.", color = Mint, fontSize = 11.sp)
+                                TextButton(onClick = { musicUri = null }, enabled = !isExporting) { Text("إزالة الموسيقى") }
+                            }
                             OutlinedButton(onClick = { multiVideoPicker.launch("video/*") }, modifier = Modifier.fillMaxWidth(), enabled = !isExporting) {
                                 Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("إضافة مقاطع فيديو")
                             }
@@ -486,8 +495,16 @@ fun StudioScreen() {
                                                 .setEffects(Effects(emptyList(), buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur)))
                                                 .build()
                                         }
-                                        val sequence = EditedMediaItemSequence.withAudioAndVideoFrom(items)
-                                        val composition = Composition.Builder(sequence).build()
+                                        val composition = if (musicUri != null) {
+                                            val musicItem = EditedMediaItem.Builder(MediaItem.fromUri(musicUri!!)).build()
+                                                .buildUpon().setIsLooping(true).build()
+                                            Composition.Builder(
+                                                EditedMediaItemSequence.withVideoFrom(items),
+                                                EditedMediaItemSequence.withAudioFrom(listOf(musicItem))
+                                            ).build()
+                                        } else {
+                                            Composition.Builder(EditedMediaItemSequence.withAudioAndVideoFrom(items)).build()
+                                        }
                                         val mainHandler = Handler(Looper.getMainLooper())
                                         try {
                                             val transformer = Transformer.Builder(context).addListener(object : Transformer.Listener {
