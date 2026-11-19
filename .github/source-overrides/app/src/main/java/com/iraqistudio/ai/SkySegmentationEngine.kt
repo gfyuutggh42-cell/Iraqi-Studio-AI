@@ -8,7 +8,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * ADE20K semantic scene segmentation. ADE20K's zero-based class id 2 is sky.
+ * ADE20K semantic scene segmentation. ADE20K's zero-based class id 2 is sky. Model signature is checked in CI before packaging.
  * Output is a binary sky mask; person-part masks are used by the editor to
  * protect detected hair, skin, clothing and accessories from sky recoloring.
  */
