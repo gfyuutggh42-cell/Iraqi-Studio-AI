@@ -367,8 +367,8 @@ fun StudioScreen() {
             }
         }
     }
-    LaunchedEffect(player, videoFilter, videoBrightness, videoSaturation, videoBlur) {
-        player?.setVideoEffects(buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur))
+    LaunchedEffect(player, videoFilter, videoBrightness, videoSaturation, videoBlur, regionSettings) {
+        player?.setVideoEffects(buildVideoEffectsWithSemanticRegions(context, videoFilter, videoBrightness, videoSaturation, videoBlur, regionSettings = regionSettings))
     }
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -480,7 +480,7 @@ fun StudioScreen() {
                                         val output = File(context.cacheDir, "iraqi_studio_join_${System.currentTimeMillis()}.mp4")
                                         val items = videoUris.map { uri ->
                                             EditedMediaItem.Builder(MediaItem.fromUri(uri))
-                                                .setEffects(Effects(emptyList(), buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur, when (exportResolution) { "720p" -> 720; "1080p" -> 1080; "2K" -> 1440; else -> 0 })))
+                                                .setEffects(Effects(emptyList(), buildVideoEffectsWithSemanticRegions(context, videoFilter, videoBrightness, videoSaturation, videoBlur, when (exportResolution) { "720p" -> 720; "1080p" -> 1080; "2K" -> 1440; else -> 0 }, regionSettings)))
                                                 .build()
                                         }
                                         val videoSequence = EditedMediaItemSequence.Builder(items).build()
@@ -564,7 +564,7 @@ fun StudioScreen() {
                                     modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp),
                                     contentScale = ContentScale.Fit
                                 )
-                                Text("هذه صورة الإطار الحالي بعد التعديل، وليست تصديراً للفيديو الكامل.", color = Color(0xFFFFD28A), fontSize = 11.sp)
+                                Text("هذه معاينة للإطار الحالي. عند التصدير تُعالج الإطارات المتتابعة بالإعدادات نفسها.", color = Color(0xFFFFD28A), fontSize = 11.sp)
                             }
                         }
                     }
@@ -602,7 +602,7 @@ fun StudioScreen() {
                                                     }
                                                 }).build()
                                                 val outputHeight = when (exportResolution) { "720p" -> 720; "1080p" -> 1080; "2K" -> 1440; else -> 0 }
-                                                val editedItem = EditedMediaItem.Builder(input).setEffects(Effects(emptyList(), buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur, outputHeight))).build()
+                                                val editedItem = EditedMediaItem.Builder(input).setEffects(Effects(emptyList(), buildVideoEffectsWithSemanticRegions(context, videoFilter, videoBrightness, videoSaturation, videoBlur, outputHeight, regionSettings))).build()
                                                 transformer.start(editedItem, output.absolutePath)
                                             } catch (error: Exception) {
                                                 isExporting = false; output.delete()
