@@ -40,6 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -222,6 +224,7 @@ private fun enhanceForExport(
 fun StudioScreen() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var activeTab by remember { mutableStateOf("video") }
+    var immersiveColorEditor by remember { mutableStateOf(false) }
     var videoUri by remember { mutableStateOf<Uri?>(null) }
     var selectedVideoRegion by remember { mutableStateOf(VideoColorRegion.FACE) }
     var regionSettings by remember { mutableStateOf(VideoColorRegion.values().associateWith { RegionColorSettings() }) }
@@ -389,6 +392,43 @@ fun StudioScreen() {
         }
     }
 
+    val analyzeCurrentVideoFrame: () -> Unit = {
+                            val sourceUri = videoUri
+                            if (sourceUri != null) scope.launch {
+                                isAnalyzingVideoFrame = true
+                                var frame: Bitmap? = null
+                                try {
+                                    val timestampUs = ((player?.currentPosition ?: 0L).coerceAtLeast(1L)) * 1000L
+                                    val decoded = withContext(Dispatchers.IO) {
+                                        MediaMetadataRetriever().let { retriever ->
+                                            try {
+                                                retriever.setDataSource(context, sourceUri)
+                                                retriever.getFrameAtTime(timestampUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                                    ?: error("تعذر استخراج إطار من الفيديو")
+                                            } finally { retriever.release() }
+                                        }
+                                    }
+                                    frame = decoded
+                                    val output = withContext(Dispatchers.Default) {
+                                        val personMask = VideoPersonSegmenter(context).use { it.segmentFrame(decoded, max(1L, timestampUs / 1000L)) }
+                                        val skyMask = segmentSky(context, decoded)
+                                        VideoRegionColorEngine.apply(
+                                            decoded, personMask, skyMask, selectedVideoRegion,
+                                            regionSettings[selectedVideoRegion] ?: RegionColorSettings()
+                                        )
+                                    }
+                                    analyzedVideoFrame?.recycle()
+                                    analyzedVideoFrame = output
+                                    Toast.makeText(context, "اكتملت معاينة المنطقة المحددة للإطار الحالي", Toast.LENGTH_SHORT).show()
+                                } catch (error: Exception) {
+                                    Toast.makeText(context, "تعذر تحليل الإطار: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+                                } finally {
+                                    frame?.recycle()
+                                    isAnalyzingVideoFrame = false
+                                }
+                            }
+    }
+
     MaterialTheme(colorScheme = darkColorScheme(primary = Mint, secondary = Violet, background = Ink, surface = Panel)) {
         Scaffold(containerColor = Ink, topBar = {
             TopAppBar(
@@ -420,6 +460,11 @@ fun StudioScreen() {
                             Spacer(Modifier.width(6.dp))
                             Text("اختيار فيديو")
                         }
+                    }
+                    OutlinedButton(onClick = { immersiveColorEditor = true }, enabled = videoUri != null, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Tune, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("فتح محرر الألوان بوضع المشاهدة المريح")
                     }
                     Box(Modifier.fillMaxWidth().height(220.dp).background(Color(0xFF080A0F), RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) {
                         if (player != null) {
@@ -517,42 +562,7 @@ fun StudioScreen() {
                         settings = regionSettings[selectedVideoRegion] ?: RegionColorSettings(),
                         onRegionSelected = { selectedVideoRegion = it },
                         onSettingsChanged = { updated -> regionSettings = regionSettings + (selectedVideoRegion to updated) },
-                        onAnalyzeFrame = {
-                            val sourceUri = videoUri
-                            if (sourceUri != null) scope.launch {
-                                isAnalyzingVideoFrame = true
-                                var frame: Bitmap? = null
-                                try {
-                                    val timestampUs = ((player?.currentPosition ?: 0L).coerceAtLeast(1L)) * 1000L
-                                    val decoded = withContext(Dispatchers.IO) {
-                                        MediaMetadataRetriever().let { retriever ->
-                                            try {
-                                                retriever.setDataSource(context, sourceUri)
-                                                retriever.getFrameAtTime(timestampUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                                                    ?: error("تعذر استخراج إطار من الفيديو")
-                                            } finally { retriever.release() }
-                                        }
-                                    }
-                                    frame = decoded
-                                    val output = withContext(Dispatchers.Default) {
-                                        val personMask = VideoPersonSegmenter(context).use { it.segmentFrame(decoded, max(1L, timestampUs / 1000L)) }
-                                        val skyMask = segmentSky(context, decoded)
-                                        VideoRegionColorEngine.apply(
-                                            decoded, personMask, skyMask, selectedVideoRegion,
-                                            regionSettings[selectedVideoRegion] ?: RegionColorSettings()
-                                        )
-                                    }
-                                    analyzedVideoFrame?.recycle()
-                                    analyzedVideoFrame = output
-                                    Toast.makeText(context, "اكتملت معاينة المنطقة المحددة للإطار الحالي", Toast.LENGTH_SHORT).show()
-                                } catch (error: Exception) {
-                                    Toast.makeText(context, "تعذر تحليل الإطار: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
-                                } finally {
-                                    frame?.recycle()
-                                    isAnalyzingVideoFrame = false
-                                }
-                            }
-                        }
+                        onAnalyzeFrame = analyzeCurrentVideoFrame
                     )
                     analyzedVideoFrame?.let { previewBitmap ->
                         Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
@@ -768,6 +778,43 @@ fun StudioScreen() {
                     Text("أدوات إضافية مثل القصّ الدقيق والفلاتر وتنعيم البشرة وإزالة الخلفية ستُضاف بعد تنفيذها واختبارها.", color = Color.LightGray, fontSize = 12.sp)
                 }
                 Text("Iraqi Studio AI • النسخة 0.6", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+            }
+        }
+        if (immersiveColorEditor && activeTab == "video") {
+            Dialog(onDismissRequest = { immersiveColorEditor = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+                Column(Modifier.fillMaxSize().background(Ink).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f)) {
+                            Text("محرر ألوان الفيديو", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text("شاهد الفيديو أثناء ضبط المناطق الأربع", color = Color.LightGray, fontSize = 11.sp)
+                        }
+                        TextButton(onClick = { immersiveColorEditor = false }) { Text("إغلاق", color = Mint) }
+                    }
+                    Box(Modifier.fillMaxWidth().weight(0.9f).background(Color.Black, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                        if (player != null) {
+                            AndroidView(factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = true } }, modifier = Modifier.fillMaxSize())
+                        } else Text("اختر فيديو أولاً", color = Color.White)
+                    }
+                    Column(Modifier.fillMaxWidth().weight(1.25f).verticalScroll(rememberScrollState())) {
+                        VideoColorStudioPanel(
+                            hasVideo = videoUri != null,
+                            analyzing = isAnalyzingVideoFrame,
+                            selectedRegion = selectedVideoRegion,
+                            settings = regionSettings[selectedVideoRegion] ?: RegionColorSettings(),
+                            onRegionSelected = { selectedVideoRegion = it },
+                            onSettingsChanged = { updated -> regionSettings = regionSettings + (selectedVideoRegion to updated) },
+                            onAnalyzeFrame = analyzeCurrentVideoFrame
+                        )
+                        analyzedVideoFrame?.let { previewBitmap ->
+                            Card(Modifier.padding(top = 8.dp), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(10.dp)) {
+                                    Text("معاينة الإطار بعد التعديل", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Image(bitmap = previewBitmap.asImageBitmap(), contentDescription = "معاينة الإطار المعدل", modifier = Modifier.fillMaxWidth().heightIn(max = 150.dp), contentScale = ContentScale.Fit)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
