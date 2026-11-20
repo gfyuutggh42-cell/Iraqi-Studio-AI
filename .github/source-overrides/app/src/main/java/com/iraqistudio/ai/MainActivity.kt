@@ -446,7 +446,7 @@ fun StudioScreen() {
                         }
                     }
                 },
-                actions = { Text("0.7", color = Color.LightGray, modifier = Modifier.padding(end = 16.dp)) },
+                actions = { Text("0.10", color = Color.LightGray, modifier = Modifier.padding(end = 16.dp)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)
             )
         }) { padding ->
@@ -454,7 +454,23 @@ fun StudioScreen() {
                 Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Video-only product: photo editor entry point intentionally removed.
+                Row(
+                    Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(14.dp)).padding(5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = activeTab == "video",
+                        onClick = { activeTab = "video"; immersiveColorEditor = false },
+                        label = { Text("محرر الفيديو") },
+                        leadingIcon = { Icon(Icons.Default.Movie, contentDescription = null) }
+                    )
+                    FilterChip(
+                        selected = activeTab == "photo",
+                        onClick = { activeTab = "photo"; immersiveColorEditor = false },
+                        label = { Text("محرر الصور") },
+                        leadingIcon = { Icon(Icons.Default.Photo, contentDescription = null) }
+                    )
+                }
                 if (activeTab == "video") {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("مشروع فيديو جديد", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -780,7 +796,7 @@ fun StudioScreen() {
                     }
                     Text("أدوات إضافية مثل القصّ الدقيق والفلاتر وتنعيم البشرة وإزالة الخلفية ستُضاف بعد تنفيذها واختبارها.", color = Color.LightGray, fontSize = 12.sp)
                 }
-                Text("Iraqi Studio AI • النسخة 0.6", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Text("Iraqi Studio AI • إصدار التطوير 0.10", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
             }
         }
         if (immersiveColorEditor && activeTab == "video") {
