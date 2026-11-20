@@ -1,6 +1,8 @@
 package com.iraqistudio.ai
 
 import android.media.MediaMetadataRetriever
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
@@ -35,8 +37,8 @@ class SemanticVideoExportInstrumentedTest {
         output.delete()
 
         val settings = mapOf(
-            VideoColorRegion.SKY to RegionColorSettings(brightness = 0.18f, saturation = 1.12f),
-            VideoColorRegion.BACKGROUND to RegionColorSettings(brightness = 0.12f, contrast = 1.08f)
+            VideoColorRegion.SKY to RegionColorSettings(brightness = 0.35f),
+            VideoColorRegion.BACKGROUND to RegionColorSettings(brightness = 0.35f)
         )
         val effects = buildVideoEffectsWithSemanticRegions(
             context = context,
@@ -80,16 +82,42 @@ class SemanticVideoExportInstrumentedTest {
             try {
                 retriever.setDataSource(output.absolutePath)
                 val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-                val frame = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                val outputFrame = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                 assertTrue("Exported video has no readable duration", duration >= 500L)
-                assertNotNull("Exported video has no decodable frame", frame)
-                frame?.recycle()
+                assertNotNull("Exported video has no decodable frame", outputFrame)
+
+                val inputRetriever = MediaMetadataRetriever()
+                try {
+                    inputRetriever.setDataSource(input.absolutePath)
+                    val inputFrame = inputRetriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    assertNotNull("Input fixture has no decodable frame", inputFrame)
+                    if (inputFrame != null && outputFrame != null) {
+                        val inputLuma = meanLuma(inputFrame)
+                        val outputLuma = meanLuma(outputFrame)
+                        assertTrue(
+                            "Semantic brightness did not reach the exported MP4 (input=$inputLuma, output=$outputLuma)",
+                            outputLuma > inputLuma + 12.0
+                        )
+                    }
+                    inputFrame?.recycle()
+                } finally {
+                    inputRetriever.release()
+                    outputFrame?.recycle()
+                }
             } finally {
                 retriever.release()
             }
         } finally {
             input.delete()
             output.delete()
+        }
+    }
+
+    private fun meanLuma(bitmap: Bitmap): Double {
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        return pixels.averageOf { pixel ->
+            0.2126 * Color.red(pixel) + 0.7152 * Color.green(pixel) + 0.0722 * Color.blue(pixel)
         }
     }
 }
