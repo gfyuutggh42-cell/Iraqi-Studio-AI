@@ -499,6 +499,78 @@ fun StudioScreen() {
                     }
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("تصدير الفيديو كاملاً", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text("يحفظ المقطع كاملاً مع إعدادات الألوان الذكية التي اخترتها.", color = Color.LightGray, fontSize = 12.sp)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf("720p", "1080p", "1440p", "الأصلية").forEach { option ->
+                                    FilterChip(
+                                        selected = exportResolution == option,
+                                        onClick = { exportResolution = option },
+                                        enabled = !isExporting && videoUri != null,
+                                        label = { Text(option, fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                            Button(
+                                onClick = {
+                                    val sourceUri = videoUri
+                                    if (sourceUri != null) {
+                                        isExporting = true
+                                        player?.pause()
+                                        val output = File(context.cacheDir, "iraqi_studio_full_${System.currentTimeMillis()}.mp4")
+                                        val outputHeight = when (exportResolution) {
+                                            "720p" -> 720
+                                            "1080p" -> 1080
+                                            "1440p" -> 1440
+                                            else -> 0
+                                        }
+                                        val editedItem = EditedMediaItem.Builder(MediaItem.fromUri(sourceUri))
+                                            .setEffects(
+                                                Effects(
+                                                    emptyList(),
+                                                    buildVideoEffectsWithSemanticRegions(
+                                                        context, videoFilter, videoBrightness, videoSaturation,
+                                                        videoBlur, outputHeight, regionSettings
+                                                    )
+                                                )
+                                            )
+                                            .build()
+                                        val mainHandler = Handler(Looper.getMainLooper())
+                                        try {
+                                            val transformer = Transformer.Builder(context).addListener(object : Transformer.Listener {
+                                                override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                                                    mainHandler.post {
+                                                        isExporting = false
+                                                        pendingExportFile = output
+                                                        saveVideoLauncher.launch("IraqiStudioAI-video.mp4")
+                                                    }
+                                                }
+                                                override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
+                                                    mainHandler.post {
+                                                        isExporting = false
+                                                        output.delete()
+                                                        Toast.makeText(context, "فشل تصدير الفيديو: ${exportException.localizedMessage}", Toast.LENGTH_LONG).show()
+                                                    }
+                                                }
+                                            }).build()
+                                            transformer.start(editedItem, output.absolutePath)
+                                        } catch (error: Exception) {
+                                            isExporting = false
+                                            output.delete()
+                                            Toast.makeText(context, "تعذر بدء التصدير: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                },
+                                enabled = videoUri != null && !isExporting,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
+                            ) {
+                                Text(if (isExporting) "جارٍ تصدير الفيديو..." else "تصدير الفيديو وحفظه")
+                            }
+                        }
+                    }
+                    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("ترتيب ودمج المقاطع", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             Text("أضف أكثر من فيديو، غيّر ترتيبها، ثم صدّرها في ملف واحد متتابع.", color = Color.LightGray, fontSize = 12.sp)
                             Text("إضافة الموسيقى الخلفية ستُفعّل بعد ربط مسار صوت مستقل بمحرك التصدير؛ لن نعرض خياراً غير عامل.", color = Color.LightGray, fontSize = 11.sp)
@@ -544,7 +616,7 @@ fun StudioScreen() {
                                         val output = File(context.cacheDir, "iraqi_studio_join_${System.currentTimeMillis()}.mp4")
                                         val items = videoUris.map { uri ->
                                             EditedMediaItem.Builder(MediaItem.fromUri(uri))
-                                                .setEffects(Effects(emptyList(), buildVideoEffectsWithSemanticRegions(context, videoFilter, videoBrightness, videoSaturation, videoBlur, when (exportResolution) { "720p" -> 720; "1080p" -> 1080; "2K" -> 1440; else -> 0 }, regionSettings)))
+                                                .setEffects(Effects(emptyList(), buildVideoEffectsWithSemanticRegions(context, videoFilter, videoBrightness, videoSaturation, videoBlur, when (exportResolution) { "720p" -> 720; "1080p" -> 1080; "1440p" -> 1440; else -> 0 }, regionSettings)))
                                                 .build()
                                         }
                                         val videoSequence = EditedMediaItemSequence.Builder(items).build()
