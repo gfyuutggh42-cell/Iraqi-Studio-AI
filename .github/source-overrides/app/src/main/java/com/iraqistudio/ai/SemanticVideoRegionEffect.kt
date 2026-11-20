@@ -3,6 +3,7 @@ package com.iraqistudio.ai
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Matrix
 import android.opengl.GLES20
 import android.opengl.GLUtils
 import androidx.media3.common.Effect
@@ -77,7 +78,16 @@ private class SemanticRegionFrameProcessor(
         val result = SettableFuture.create<Bitmap>()
         // Copy before returning: Media3 may recycle the input buffer once this future completes.
         val frame = try {
-            image.copyToBitmap()
+            // ByteBufferGlEffect stores pixels in GL's bottom-up row order.
+            // Convert explicitly and recycle the temporary bitmap each frame.
+            val glPixels = Bitmap.createBitmap(image.width, image.height, Bitmap.Config.ARGB_8888)
+            val pixelBuffer = image.pixelBuffer.duplicate()
+            pixelBuffer.rewind()
+            glPixels.copyPixelsFromBuffer(pixelBuffer)
+            val flip = Matrix().apply { setScale(1f, -1f) }
+            Bitmap.createBitmap(glPixels, 0, 0, glPixels.width, glPixels.height, flip, true).also {
+                glPixels.recycle()
+            }
         } catch (error: Throwable) {
             result.setException(error)
             return result
@@ -120,7 +130,11 @@ private class SemanticRegionFrameProcessor(
             GLES20.glGetIntegerv(GLES20.GL_TEXTURE_BINDING_2D, previous, 0)
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, outputFrame.texId)
             GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 4)
-            GLUtils.texSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, upload)
+            // Restore GL's bottom-up pixel order before updating the frame texture.
+            val flip = Matrix().apply { setScale(1f, -1f) }
+            val glUpload = Bitmap.createBitmap(upload, 0, 0, upload.width, upload.height, flip, true)
+            GLUtils.texSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, glUpload)
+            glUpload.recycle()
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, previous[0])
         } finally {
             if (upload !== result && !upload.isRecycled) upload.recycle()
