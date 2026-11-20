@@ -56,6 +56,7 @@ import androidx.media3.transformer.Transformer
 import androidx.media3.ui.PlayerView
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.max
@@ -225,6 +226,7 @@ fun StudioScreen() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var activeTab by remember { mutableStateOf("video") }
     var immersiveColorEditor by remember { mutableStateOf(false) }
+    var editorPositionMs by remember { mutableLongStateOf(0L) }
     var videoUri by remember { mutableStateOf<Uri?>(null) }
     var selectedVideoRegion by remember { mutableStateOf(VideoColorRegion.FACE) }
     var regionSettings by remember { mutableStateOf(VideoColorRegion.values().associateWith { RegionColorSettings() }) }
@@ -281,6 +283,7 @@ fun StudioScreen() {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         videoUri = uri
         videoUris = if (uri != null) listOf(uri) else emptyList()
+        if (uri != null) immersiveColorEditor = true
         durationMs = 0L
         startSeconds = 0f
         endSeconds = 0f
@@ -781,21 +784,75 @@ fun StudioScreen() {
             }
         }
         if (immersiveColorEditor && activeTab == "video") {
+            LaunchedEffect(player) {
+                val activePlayer = player
+                if (activePlayer != null) {
+                    while (true) {
+                        editorPositionMs = activePlayer.currentPosition.coerceAtLeast(0L)
+                        delay(250)
+                    }
+                }
+            }
             Dialog(onDismissRequest = { immersiveColorEditor = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-                Column(Modifier.fillMaxSize().background(Ink).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(
+                    Modifier.fillMaxSize().background(Color(0xFF090B11)).padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    Row(Modifier.fillMaxWidth().height(42.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Column(Modifier.weight(1f)) {
-                            Text("محرر ألوان الفيديو", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            Text("شاهد الفيديو أثناء ضبط المناطق الأربع", color = Color.LightGray, fontSize = 11.sp)
+                            Text("IRAQI STUDIO", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                            Text("محرر الفيديو • AI COLOR", color = Mint, fontSize = 10.sp)
                         }
-                        TextButton(onClick = { immersiveColorEditor = false }) { Text("إغلاق", color = Mint) }
+                        TextButton(onClick = { immersiveColorEditor = false }) { Text("تم", color = Mint, fontWeight = FontWeight.Bold) }
                     }
-                    Box(Modifier.fillMaxWidth().weight(0.9f).background(Color.Black, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier.fillMaxWidth().weight(1.35f).background(Color.Black, RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
                         if (player != null) {
-                            AndroidView(factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = true } }, modifier = Modifier.fillMaxSize())
-                        } else Text("اختر فيديو أولاً", color = Color.White)
+                            AndroidView(
+                                factory = { ctx -> PlayerView(ctx).apply {
+                                    this.player = player
+                                    useController = true
+                                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                                } },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.Movie, null, tint = Mint, modifier = Modifier.size(40.dp))
+                                Text("اختر فيديو للبدء", color = Color.White)
+                            }
+                        }
+                        analyzedVideoFrame?.let { preview ->
+                            Image(
+                                bitmap = preview.asImageBitmap(),
+                                contentDescription = "معاينة لون المنطقة المحددة",
+                                modifier = Modifier.align(Alignment.TopStart).padding(8.dp).width(92.dp).height(62.dp),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                     }
-                    Column(Modifier.fillMaxWidth().weight(1.25f).verticalScroll(rememberScrollState())) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Panel),
+                        shape = RoundedCornerShape(13.dp)
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(timeLabel(editorPositionMs), color = Mint, fontSize = 10.sp)
+                            Slider(
+                                value = editorPositionMs.coerceIn(0L, durationMs.coerceAtLeast(1L)).toFloat(),
+                                onValueChange = { next ->
+                                    editorPositionMs = next.toLong()
+                                    player?.seekTo(editorPositionMs)
+                                },
+                                valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(timeLabel(durationMs), color = Color.LightGray, fontSize = 10.sp)
+                        }
+                    }
+                    Box(Modifier.fillMaxWidth().weight(1.05f)) {
                         VideoColorStudioPanel(
                             hasVideo = videoUri != null,
                             analyzing = isAnalyzingVideoFrame,
@@ -803,16 +860,16 @@ fun StudioScreen() {
                             settings = regionSettings[selectedVideoRegion] ?: RegionColorSettings(),
                             onRegionSelected = { selectedVideoRegion = it },
                             onSettingsChanged = { updated -> regionSettings = regionSettings + (selectedVideoRegion to updated) },
-                            onAnalyzeFrame = analyzeCurrentVideoFrame
+                            onAnalyzeFrame = analyzeCurrentVideoFrame,
+                            compact = true
                         )
-                        analyzedVideoFrame?.let { previewBitmap ->
-                            Card(Modifier.padding(top = 8.dp), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
-                                Column(Modifier.fillMaxWidth().padding(10.dp)) {
-                                    Text("معاينة الإطار بعد التعديل", color = Color.White, fontWeight = FontWeight.Bold)
-                                    Image(bitmap = previewBitmap.asImageBitmap(), contentDescription = "معاينة الإطار المعدل", modifier = Modifier.fillMaxWidth().heightIn(max = 150.dp), contentScale = ContentScale.Fit)
-                                }
-                            }
+                    }
+                    Row(Modifier.fillMaxWidth().height(42.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { player?.seekTo(0L) }) { Text("البداية", color = Color.LightGray, fontSize = 11.sp) }
+                        TextButton(onClick = { player?.playWhenReady = !(player?.isPlaying ?: false) }) {
+                            Text(if (player?.isPlaying == true) "إيقاف" else "تشغيل", color = Mint, fontWeight = FontWeight.Bold)
                         }
+                        TextButton(onClick = { immersiveColorEditor = false }) { Text("أدوات المشروع", color = Color.LightGray, fontSize = 11.sp) }
                     }
                 }
             }
