@@ -563,7 +563,8 @@ fun StudioScreen() {
                                                         mainHandler.post { isExporting = false; output.delete(); Toast.makeText(context, "فشل التصدير: ${exportException.localizedMessage}", Toast.LENGTH_LONG).show() }
                                                     }
                                                 }).build()
-                                                val editedItem = EditedMediaItem.Builder(input).setEffects(Effects(emptyList(), buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur))).build()
+                                                val outputHeight = when (exportResolution) { "720p" -> 720; "1080p" -> 1080; "2K" -> 1440; else -> 0 }
+                                                val editedItem = EditedMediaItem.Builder(input).setEffects(Effects(emptyList(), buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur, outputHeight))).build()
                                                 transformer.start(editedItem, output.absolutePath)
                                             } catch (error: Exception) {
                                                 isExporting = false; output.delete()
