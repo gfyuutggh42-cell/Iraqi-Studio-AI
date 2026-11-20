@@ -2,6 +2,7 @@ package com.iraqistudio.ai
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -222,6 +223,10 @@ fun StudioScreen() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var activeTab by remember { mutableStateOf("video") }
     var videoUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedVideoRegion by remember { mutableStateOf(VideoColorRegion.FACE) }
+    var regionSettings by remember { mutableStateOf(VideoColorRegion.values().associateWith { RegionColorSettings() }) }
+    var analyzedVideoFrame by remember { mutableStateOf<Bitmap?>(null) }
+    var isAnalyzingVideoFrame by remember { mutableStateOf(false) }
     var videoUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var musicUri by remember { mutableStateOf<Uri?>(null) }
     var durationMs by remember { mutableLongStateOf(0L) }
@@ -505,29 +510,62 @@ fun StudioScreen() {
                             Text("يُحافظ الدمج على مسارات الصوت الأصلية للمقاطع. الانتقالات المتداخلة غير مدعومة في محرك الدمج الحالي.", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
-                    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("تأثيرات الفيديو", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                            Text("تظهر في المعاينة وتُطبّق عند التصدير.", color = Color.LightGray, fontSize = 12.sp)
-                            Text("دقة التصدير", color = Color.White, fontWeight = FontWeight.SemiBold)
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf("720p", "1080p", "2K", "الأصلية").forEach { option ->
-                                    FilterChip(selected = exportResolution == option, onClick = { exportResolution = option }, label = { Text(option, fontSize = 11.sp) })
+                    VideoColorStudioPanel(
+                        hasVideo = videoUri != null,
+                        analyzing = isAnalyzingVideoFrame,
+                        selectedRegion = selectedVideoRegion,
+                        settings = regionSettings[selectedVideoRegion] ?: RegionColorSettings(),
+                        onRegionSelected = { selectedVideoRegion = it },
+                        onSettingsChanged = { updated -> regionSettings = regionSettings + (selectedVideoRegion to updated) },
+                        onAnalyzeFrame = {
+                            val sourceUri = videoUri
+                            if (sourceUri != null) scope.launch {
+                                isAnalyzingVideoFrame = true
+                                var frame: Bitmap? = null
+                                try {
+                                    val timestampUs = ((player?.currentPosition ?: 0L).coerceAtLeast(1L)) * 1000L
+                                    val decoded = withContext(Dispatchers.IO) {
+                                        MediaMetadataRetriever().let { retriever ->
+                                            try {
+                                                retriever.setDataSource(context, sourceUri)
+                                                retriever.getFrameAtTime(timestampUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                                    ?: error("تعذر استخراج إطار من الفيديو")
+                                            } finally { retriever.release() }
+                                        }
+                                    }
+                                    frame = decoded
+                                    val output = withContext(Dispatchers.Default) {
+                                        val personMask = VideoPersonSegmenter(context).use { it.segmentFrame(decoded, max(1L, timestampUs / 1000L)) }
+                                        val skyMask = segmentSky(context, decoded)
+                                        VideoRegionColorEngine.apply(
+                                            decoded, personMask, skyMask, selectedVideoRegion,
+                                            regionSettings[selectedVideoRegion] ?: RegionColorSettings()
+                                        )
+                                    }
+                                    analyzedVideoFrame?.recycle()
+                                    analyzedVideoFrame = output
+                                    Toast.makeText(context, "اكتملت معاينة المنطقة المحددة للإطار الحالي", Toast.LENGTH_SHORT).show()
+                                } catch (error: Exception) {
+                                    Toast.makeText(context, "تعذر تحليل الإطار: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+                                } finally {
+                                    frame?.recycle()
+                                    isAnalyzingVideoFrame = false
                                 }
                             }
-                            Text(if (exportResolution == "2K") "سيتم إخراج الفيديو بارتفاع 1440 بكسل مع الحفاظ على نسبة الأبعاد؛ التكبير لا يستعيد تفاصيل غير موجودة." else "تُطبّق الدقة المختارة عند تصدير المقطع أو دمج المقاطع.", color = Color.LightGray, fontSize = 11.sp)
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                listOf("طبيعي", "سينمائي", "أبيض وأسود", "سيبيا", "معكوس").forEach { preset ->
-                                    FilterChip(selected = videoFilter == preset, onClick = { videoFilter = preset }, label = { Text(preset, fontSize = 11.sp) })
-                                }
+                        }
+                    )
+                    analyzedVideoFrame?.let { previewBitmap ->
+                        Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("معاينة المنطقة المحددة", color = Color.White, fontWeight = FontWeight.Bold)
+                                Image(
+                                    bitmap = previewBitmap.asImageBitmap(),
+                                    contentDescription = "معاينة الإطار بعد تعديل المنطقة المحددة",
+                                    modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                                Text("هذه صورة الإطار الحالي بعد التعديل، وليست تصديراً للفيديو الكامل.", color = Color(0xFFFFD28A), fontSize = 11.sp)
                             }
-                            Text("السطوع: ${"%.0f".format(videoBrightness * 100)}%", color = Color.White)
-                            Slider(value = videoBrightness, onValueChange = { videoBrightness = it }, valueRange = -0.5f..0.5f)
-                            Text("تشبع الألوان: ${"%.0f".format(videoSaturation)}", color = Color.White)
-                            Slider(value = videoSaturation, onValueChange = { videoSaturation = it }, valueRange = -100f..100f)
-                            Text("تمويه كامل الصورة: ${"%.0f".format(videoBlur)}", color = Color.White)
-                            Slider(value = videoBlur, onValueChange = { videoBlur = it }, valueRange = 0f..12f)
-                            Text("هذا تمويه للإطار كله وليس عزل الشخص. البورتريه للفيديو ما زال قيد التطوير.", color = Mint, fontSize = 11.sp)
                         }
                     }
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
