@@ -95,9 +95,11 @@ jobs:
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/SkySegmentationEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/SkySegmentationEngine.kt
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/VideoPortraitEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/VideoPortraitEngine.kt
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/VideoEffectsEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/VideoEffectsEngine.kt
+          cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/VideoRegionColorEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/VideoRegionColorEngine.kt
           mkdir -p IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai
           cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt
           cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/VideoPortraitEngineInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/VideoPortraitEngineInstrumentedTest.kt
+          cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/VideoRegionColorEngineInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/VideoRegionColorEngineInstrumentedTest.kt
           cp .github/source-overrides/app/build.gradle.kts IraqiStudioAI/app/build.gradle.kts
 
       - name: Upload prepared source for inspection
@@ -117,14 +119,15 @@ jobs:
         working-directory: IraqiStudioAI
         run: gradle assembleDebug
 
-      - name: Run sky segmentation on Android 15 emulator
+      - name: Run video region segmentation tests on Android 10 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 29
           target: default
+          profile: pixel_2
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048 -cores 2
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096 -cores 2
           script: cd IraqiStudioAI && timeout 25m gradle connectedDebugAndroidTest --no-daemon --stacktrace
 
       - name: Upload APK
