@@ -443,13 +443,7 @@ fun StudioScreen() {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("ترتيب ودمج المقاطع", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             Text("أضف أكثر من فيديو، غيّر ترتيبها، ثم صدّرها في ملف واحد متتابع.", color = Color.LightGray, fontSize = 12.sp)
-                            OutlinedButton(onClick = { audioPicker.launch("audio/*") }, modifier = Modifier.fillMaxWidth(), enabled = !isExporting) {
-                                Text(if (musicUri == null) "اختيار موسيقى خلفية" else "تغيير الموسيقى الخلفية")
-                            }
-                            if (musicUri != null) {
-                                Text("تم اختيار موسيقى خلفية. عند الدمج ستستبدل صوت المقاطع الأصلي لتجنب تعارض صيغ الصوت.", color = Mint, fontSize = 11.sp)
-                                TextButton(onClick = { musicUri = null }, enabled = !isExporting) { Text("إزالة الموسيقى") }
-                            }
+                            Text("إضافة الموسيقى الخلفية ستُفعّل بعد ربط مسار صوت مستقل بمحرك التصدير؛ لن نعرض خياراً غير عامل.", color = Color.LightGray, fontSize = 11.sp)
                             OutlinedButton(onClick = { multiVideoPicker.launch("video/*") }, modifier = Modifier.fillMaxWidth(), enabled = !isExporting) {
                                 Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("إضافة مقاطع فيديو")
                             }
@@ -492,22 +486,11 @@ fun StudioScreen() {
                                         val output = File(context.cacheDir, "iraqi_studio_join_${System.currentTimeMillis()}.mp4")
                                         val items = videoUris.map { uri ->
                                             EditedMediaItem.Builder(MediaItem.fromUri(uri))
-                                                .setRemoveAudio(musicUri != null)
                                                 .setEffects(Effects(emptyList(), buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur)))
                                                 .build()
                                         }
                                         val videoSequence = EditedMediaItemSequence.Builder(items).build()
-                                        val composition = if (musicUri != null) {
-                                            val musicItem = EditedMediaItem.Builder(MediaItem.fromUri(musicUri!!))
-                                                .setRemoveVideo(true)
-                                                .build()
-                                            val musicSequence = EditedMediaItemSequence.Builder(listOf(musicItem))
-                                                .setIsLooping(true)
-                                                .build()
-                                            Composition.Builder(videoSequence, musicSequence).build()
-                                        } else {
-                                            Composition.Builder(videoSequence).build()
-                                        }
+                                        val composition = Composition.Builder(videoSequence).build()
                                         val mainHandler = Handler(Looper.getMainLooper())
                                         try {
                                             val transformer = Transformer.Builder(context).addListener(object : Transformer.Listener {
