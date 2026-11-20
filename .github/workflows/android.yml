@@ -89,6 +89,19 @@ jobs:
           assert sky_pixels > 1000, "Model did not detect sky in the known beach test image"
           PY
 
+      - name: Prepare a short H264 clip for end-to-end export validation
+        working-directory: IraqiStudioAI
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -y -loop 1 -framerate 2 -i app/src/androidTest/assets/ade20k_sky_test.jpg -t 1.5 \
+            -vf "scale=320:320:force_original_aspect_ratio=decrease,pad=320:320:(ow-iw)/2:(oh-ih)/2" \
+            -r 2 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -movflags +faststart -an \
+            app/src/androidTest/assets/semantic_export_test.mp4
+          test -s app/src/androidTest/assets/semantic_export_test.mp4
+
       - name: Apply updated editor source
         run: |
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/MainActivity.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/MainActivity.kt
@@ -130,6 +143,7 @@ jobs:
           cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt
           cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/VideoPortraitEngineInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/VideoPortraitEngineInstrumentedTest.kt
           cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/VideoRegionColorEngineInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/VideoRegionColorEngineInstrumentedTest.kt
+          cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/SemanticVideoExportInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/SemanticVideoExportInstrumentedTest.kt
           mkdir -p IraqiStudioAI/app/src/test/java/com/iraqistudio/ai
           cp .github/source-overrides/app/src/test/java/com/iraqistudio/ai/VideoRegionColorEngineTest.kt IraqiStudioAI/app/src/test/java/com/iraqistudio/ai/VideoRegionColorEngineTest.kt
           cp .github/source-overrides/app/build.gradle.kts IraqiStudioAI/app/build.gradle.kts
