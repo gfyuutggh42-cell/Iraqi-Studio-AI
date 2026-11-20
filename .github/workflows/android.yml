@@ -99,6 +99,31 @@ jobs:
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/VideoRegionColorEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/VideoRegionColorEngine.kt
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/SemanticVideoRegionEffect.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/SemanticVideoRegionEffect.kt
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/VideoColorStudioPanel.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/VideoColorStudioPanel.kt
+          mkdir -p IraqiStudioAI/app/src/main/res/drawable
+          cp .github/source-overrides/app/src/main/res/drawable/ic_iraqi_studio_brand.xml IraqiStudioAI/app/src/main/res/drawable/ic_iraqi_studio_brand.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          manifest = Path('IraqiStudioAI/app/src/main/AndroidManifest.xml')
+          if not manifest.exists():
+              raise SystemExit('AndroidManifest.xml not found')
+          data = manifest.read_text()
+          start = data.find('<application')
+          end = data.find('>', start)
+          if start < 0 or end < 0:
+              raise SystemExit('Application manifest tag not found')
+          tag = data[start:end + 1]
+          for attr in ('icon', 'roundIcon'):
+              pattern = rf'android:{attr}="[^"]*"'
+              replacement = f'android:{attr}="@drawable/ic_iraqi_studio_brand"'
+              if re.search(pattern, tag):
+                  tag = re.sub(pattern, replacement, tag, count=1)
+              elif attr == 'icon':
+                  tag = tag[:-1] + ' android:icon="@drawable/ic_iraqi_studio_brand">'
+          data = data[:start] + tag + data[end + 1:]
+          manifest.write_text(data)
+          print('Applied black Iraqi Studio AI launcher icon')
+          PY
           mkdir -p IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai
           cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/SkySegmentationInstrumentedTest.kt
           cp .github/source-overrides/app/src/androidTest/java/com/iraqistudio/ai/VideoPortraitEngineInstrumentedTest.kt IraqiStudioAI/app/src/androidTest/java/com/iraqistudio/ai/VideoPortraitEngineInstrumentedTest.kt
