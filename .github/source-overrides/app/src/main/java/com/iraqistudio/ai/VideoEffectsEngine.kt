@@ -8,12 +8,13 @@ import androidx.media3.effect.GaussianBlur
 import androidx.media3.effect.HslAdjustment
 import androidx.media3.effect.RgbFilter
 import androidx.media3.effect.RgbMatrix
+import androidx.media3.effect.Presentation
 
 /** GPU video effects shared by ExoPlayer preview and Transformer export.
  * Blur intentionally affects the complete frame, not a person-only mask.
  */
 @UnstableApi
-fun buildVideoEffects(preset: String, brightness: Float, saturation: Float, blurSigma: Float): List<Effect> {
+fun buildVideoEffects(preset: String, brightness: Float, saturation: Float, blurSigma: Float, outputHeight: Int = 0): List<Effect> {
     val effects = mutableListOf<Effect>()
     when (preset) {
         "سينمائي" -> {
@@ -36,5 +37,6 @@ fun buildVideoEffects(preset: String, brightness: Float, saturation: Float, blur
     if (brightness != 0f) effects += Brightness(brightness.coerceIn(-1f, 1f))
     if (saturation != 0f) effects += HslAdjustment.Builder().adjustSaturation(saturation.coerceIn(-100f, 100f)).build()
     if (blurSigma > 0f) effects += GaussianBlur(blurSigma.coerceIn(0.1f, 12f))
+    if (outputHeight > 0) effects += Presentation.createForHeight(outputHeight)
     return effects
 }
