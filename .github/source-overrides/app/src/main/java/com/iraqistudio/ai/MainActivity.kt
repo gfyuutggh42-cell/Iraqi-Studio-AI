@@ -232,6 +232,7 @@ fun StudioScreen() {
     var videoBrightness by remember { mutableFloatStateOf(0f) }
     var videoSaturation by remember { mutableFloatStateOf(0f) }
     var videoBlur by remember { mutableFloatStateOf(0f) }
+    var exportResolution by remember { mutableStateOf("1080p") }
     var pendingExportFile by remember { mutableStateOf<File?>(null) }
     var photoBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var selectivePreview by remember { mutableStateOf<Bitmap?>(null) }
@@ -474,7 +475,7 @@ fun StudioScreen() {
                                         val output = File(context.cacheDir, "iraqi_studio_join_${System.currentTimeMillis()}.mp4")
                                         val items = videoUris.map { uri ->
                                             EditedMediaItem.Builder(MediaItem.fromUri(uri))
-                                                .setEffects(Effects(emptyList(), buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur)))
+                                                .setEffects(Effects(emptyList(), buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur, when (exportResolution) { "720p" -> 720; "1080p" -> 1080; "2K" -> 1440; else -> 0 })))
                                                 .build()
                                         }
                                         val videoSequence = EditedMediaItemSequence.Builder(items).build()
@@ -508,6 +509,13 @@ fun StudioScreen() {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("تأثيرات الفيديو", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             Text("تظهر في المعاينة وتُطبّق عند التصدير.", color = Color.LightGray, fontSize = 12.sp)
+                            Text("دقة التصدير", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("720p", "1080p", "2K", "الأصلية").forEach { option ->
+                                    FilterChip(selected = exportResolution == option, onClick = { exportResolution = option }, label = { Text(option, fontSize = 11.sp) })
+                                }
+                            }
+                            Text(if (exportResolution == "2K") "سيتم إخراج الفيديو بارتفاع 1440 بكسل مع الحفاظ على نسبة الأبعاد؛ التكبير لا يستعيد تفاصيل غير موجودة." else "تُطبّق الدقة المختارة عند تصدير المقطع أو دمج المقاطع.", color = Color.LightGray, fontSize = 11.sp)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 listOf("طبيعي", "سينمائي", "أبيض وأسود", "سيبيا", "معكوس").forEach { preset ->
                                     FilterChip(selected = videoFilter == preset, onClick = { videoFilter = preset }, label = { Text(preset, fontSize = 11.sp) })
