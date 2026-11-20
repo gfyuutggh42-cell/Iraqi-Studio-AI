@@ -134,7 +134,7 @@ jobs:
               if count == 0:
                   raise SystemExit('Could not safely locate dependency repositories block')
               settings.write_text(updated)
-          print('Maven mirror configured in', settings)
+          print('Maven mirror configured in', settings) # Central dependency fallback enabled
           PY
 
       - name: Set up Gradle
