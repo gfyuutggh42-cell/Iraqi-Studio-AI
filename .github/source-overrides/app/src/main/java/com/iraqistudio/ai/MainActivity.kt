@@ -393,11 +393,11 @@ fun StudioScreen() {
                         }
                         Column {
                             Text("Iraqi Studio AI", fontWeight = FontWeight.Bold, color = Color.White)
-                            Text("استوديو الفيديو والصور الذكي", fontSize = 11.sp, color = Mint)
+                            Text("استوديو ألوان الفيديو والبورتريه بالذكاء الاصطناعي", fontSize = 11.sp, color = Mint)
                         }
                     }
                 },
-                actions = { Text("0.5", color = Color.LightGray, modifier = Modifier.padding(end = 16.dp)) },
+                actions = { Text("0.7", color = Color.LightGray, modifier = Modifier.padding(end = 16.dp)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)
             )
         }) { padding ->
@@ -405,19 +405,7 @@ fun StudioScreen() {
                 Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = { activeTab = "video" }, modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "video") Mint else Panel, contentColor = if (activeTab == "video") Ink else Color.White),
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Icon(Icons.Default.Movie, null); Spacer(Modifier.width(6.dp)); Text("محرر الفيديو") }
-                    Button(
-                        onClick = { activeTab = "photo" }, modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "photo") Violet else Panel, contentColor = Color.White),
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Icon(Icons.Default.Photo, null); Spacer(Modifier.width(6.dp)); Text("محرر الصور") }
-                }
-
+                // Video-only product: photo editor entry point intentionally removed.
                 if (activeTab == "video") {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("مشروع فيديو جديد", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
