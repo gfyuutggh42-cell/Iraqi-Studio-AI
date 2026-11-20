@@ -62,8 +62,9 @@ private class SemanticRegionFrameProcessor(
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
         frameWidth = inputWidth
         frameHeight = inputHeight
-        // Both semantic models are designed around a 512x512 analysis image.
-        return Size(512, 512)
+        // Keep the frame at its original resolution for color application.
+        // The processor downsizes a copy only for the segmentation models.
+        return Size(inputWidth, inputHeight)
     }
 
     override fun getScaledRegion(presentationTimeUs: Long): GlRect =
