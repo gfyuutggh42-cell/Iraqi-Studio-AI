@@ -37,7 +37,7 @@ jobs:
           od -An -tx1 -N8 app/src/main/assets/deeplabv3_ade20k.tflite
           sha256sum app/src/main/assets/deeplabv3_ade20k.tflite
           echo "12a2141f28928a9bccce5063d0f868211c9d2633a263b9141594ff300daeafc0  app/src/main/assets/deeplabv3_ade20k.tflite" | sha256sum -c -
-          test "$(dd if=app/src/main/assets/deeplabv3_ade20k.tflite bs=1 skip=4 count=4 2>/dev/null | od -An -tx1 | tr -d ' \\n')" = "54464c33"
+          test "$(dd if=app/src/main/assets/deeplabv3_ade20k.tflite bs=1 skip=4 count=4 2>/dev/null | od -An -tx1 | tr -d ' \n')" = "54464c33"
           test "$(stat -c%s app/src/main/assets/deeplabv3_ade20k.tflite)" -gt 5000000
 
       - name: Set up Python for TFLite validation
@@ -126,11 +126,11 @@ jobs:
           text = settings.read_text()
           mirror = 'maven { url = uri("https://maven.aliyun.com/repository/public") }'
           if 'maven.aliyun.com/repository/public' not in text:
-              pattern = r'(dependencyResolutionManagement\\s*\\{[\\s\\S]*?repositories\\s*\\{)'
-              updated, count = re.subn(pattern, r'\\1\\n        ' + mirror, text, count=1)
+              pattern = r'(dependencyResolutionManagement\s*\{[\s\S]*?repositories\s*\{)'
+              updated, count = re.subn(pattern, r'\1\n        ' + mirror, text, count=1)
               if count == 0:
-                  pattern = r'(allprojects\\s*\\{[\\s\\S]*?repositories\\s*\\{)'
-                  updated, count = re.subn(pattern, r'\\1\\n        ' + mirror, text, count=1)
+                  pattern = r'(allprojects\s*\{[\s\S]*?repositories\s*\{)'
+                  updated, count = re.subn(pattern, r'\1\n        ' + mirror, text, count=1)
               if count == 0:
                   raise SystemExit('Could not safely locate dependency repositories block')
               settings.write_text(updated)
