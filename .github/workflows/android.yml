@@ -127,7 +127,7 @@ jobs:
           mirror = 'maven { url = uri("https://maven.aliyun.com/repository/public") }'
           if 'maven.aliyun.com/repository/public' not in text:
               pattern = r'(dependencyResolutionManagement\s*\{[\s\S]*?repositories\s*\{)'
-              updated, count = re.subn(pattern, r'\1\n        ' + mirror, text, count=1)
+              updated, count = re.subn(pattern, r'\1\n        ' + mirror + '\n        ', text, count=1)
               if count == 0:
                   pattern = r'(allprojects\s*\{[\s\S]*?repositories\s*\{)'
                   updated, count = re.subn(pattern, r'\1\n        ' + mirror, text, count=1)
