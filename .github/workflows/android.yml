@@ -155,30 +155,6 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      - name: Add reliable Maven Central mirror
-        working-directory: IraqiStudioAI
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          candidates = [Path('settings.gradle.kts'), Path('settings.gradle')]
-          settings = next((p for p in candidates if p.exists()), None)
-          if settings is None:
-              raise SystemExit('Gradle settings file was not found')
-          text = settings.read_text()
-          mirror = 'maven { url = uri("https://maven.aliyun.com/repository/public") }'
-          if 'maven.aliyun.com/repository/public' not in text:
-              pattern = r'(dependencyResolutionManagement\s*\{[\s\S]*?repositories\s*\{)'
-              updated, count = re.subn(pattern, r'\1\n        ' + mirror + '\n        ', text, count=1)
-              if count == 0:
-                  pattern = r'(allprojects\s*\{[\s\S]*?repositories\s*\{)'
-                  updated, count = re.subn(pattern, r'\1\n        ' + mirror, text, count=1)
-              if count == 0:
-                  raise SystemExit('Could not safely locate dependency repositories block')
-              settings.write_text(updated)
-          print('Maven mirror configured in', settings) # Central dependency fallback enabled
-          PY
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -197,7 +173,7 @@ jobs:
         if: steps.build_apk.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: Iraqi-Studio-AI-APK-v0.9.0
+          name: Iraqi-Studio-AI-APK-v0.10.0
           path: IraqiStudioAI/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
