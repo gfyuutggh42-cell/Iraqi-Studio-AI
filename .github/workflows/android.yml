@@ -99,6 +99,8 @@ jobs:
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/VideoRegionColorEngine.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/VideoRegionColorEngine.kt
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/SemanticVideoRegionEffect.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/SemanticVideoRegionEffect.kt
           cp .github/source-overrides/app/src/main/java/com/iraqistudio/ai/VideoColorStudioPanel.kt IraqiStudioAI/app/src/main/java/com/iraqistudio/ai/VideoColorStudioPanel.kt
+          cp .github/source-overrides/app/build.gradle.kts IraqiStudioAI/app/build.gradle.kts
+          cp .github/source-overrides/app/src/main/res/values/styles.xml IraqiStudioAI/app/src/main/res/values/styles.xml
           mkdir -p IraqiStudioAI/app/src/main/res/drawable
           cp .github/source-overrides/app/src/main/res/drawable/ic_iraqi_studio_brand.xml IraqiStudioAI/app/src/main/res/drawable/ic_iraqi_studio_brand.xml
           python3 - <<'PY'
