@@ -117,10 +117,10 @@ jobs:
         working-directory: IraqiStudioAI
         run: gradle assembleDebug
 
-      - name: Run sky segmentation on Android 10 emulator
+      - name: Run sky segmentation on Android 15 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 29
+          api-level: 35
           target: default
           arch: x86_64
           disable-animations: true
