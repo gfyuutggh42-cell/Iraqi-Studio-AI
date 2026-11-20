@@ -35,7 +35,7 @@ fun buildVideoEffectsWithSemanticRegions(
     outputHeight: Int = 0,
     regionSettings: Map<VideoColorRegion, RegionColorSettings>
 ): List<Effect> {
-    val effects = buildVideoEffects(preset, brightness, saturation, blurSigma, outputHeight)
+    val effects = buildVideoEffects(preset, brightness, saturation, blurSigma, outputHeight).toMutableList()
     if (regionSettings.values.any { !it.isNeutral() }) {
         effects += ByteBufferGlEffect(SemanticRegionFrameProcessor(context.applicationContext, regionSettings))
     }
