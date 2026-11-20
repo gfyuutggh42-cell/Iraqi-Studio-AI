@@ -124,6 +124,7 @@ jobs:
           target: default
           arch: x86_64
           disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048 -cores 2
           script: cd IraqiStudioAI && timeout 25m gradle connectedDebugAndroidTest --no-daemon --stacktrace
 
       - name: Upload APK
