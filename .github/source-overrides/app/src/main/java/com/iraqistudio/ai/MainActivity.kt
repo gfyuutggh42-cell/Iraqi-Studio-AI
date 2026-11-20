@@ -492,18 +492,21 @@ fun StudioScreen() {
                                         val output = File(context.cacheDir, "iraqi_studio_join_${System.currentTimeMillis()}.mp4")
                                         val items = videoUris.map { uri ->
                                             EditedMediaItem.Builder(MediaItem.fromUri(uri))
+                                                .setRemoveAudio(musicUri != null)
                                                 .setEffects(Effects(emptyList(), buildVideoEffects(videoFilter, videoBrightness, videoSaturation, videoBlur)))
                                                 .build()
                                         }
+                                        val videoSequence = EditedMediaItemSequence.Builder(items).build()
                                         val composition = if (musicUri != null) {
-                                            val musicItem = EditedMediaItem.Builder(MediaItem.fromUri(musicUri!!)).build()
-                                                .buildUpon().setIsLooping(true).build()
-                                            Composition.Builder(
-                                                EditedMediaItemSequence.withVideoFrom(items),
-                                                EditedMediaItemSequence.withAudioFrom(listOf(musicItem))
-                                            ).build()
+                                            val musicItem = EditedMediaItem.Builder(MediaItem.fromUri(musicUri!!))
+                                                .setRemoveVideo(true)
+                                                .build()
+                                            val musicSequence = EditedMediaItemSequence.Builder(listOf(musicItem))
+                                                .setIsLooping(true)
+                                                .build()
+                                            Composition.Builder(videoSequence, musicSequence).build()
                                         } else {
-                                            Composition.Builder(EditedMediaItemSequence.withAudioAndVideoFrom(items)).build()
+                                            Composition.Builder(videoSequence).build()
                                         }
                                         val mainHandler = Handler(Looper.getMainLooper())
                                         try {
