@@ -116,8 +116,10 @@ class SemanticVideoExportInstrumentedTest {
     private fun meanLuma(bitmap: Bitmap): Double {
         val pixels = IntArray(bitmap.width * bitmap.height)
         bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        return pixels.averageOf { pixel ->
-            0.2126 * Color.red(pixel) + 0.7152 * Color.green(pixel) + 0.0722 * Color.blue(pixel)
+        var total = 0.0
+        for (pixel in pixels) {
+            total += 0.2126 * Color.red(pixel) + 0.7152 * Color.green(pixel) + 0.0722 * Color.blue(pixel)
         }
+        return total / pixels.size.coerceAtLeast(1)
     }
 }
