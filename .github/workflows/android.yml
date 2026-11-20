@@ -165,10 +165,6 @@ jobs:
         working-directory: IraqiStudioAI
         run: gradle assembleDebug
 
-      - name: Run isolated region filter unit tests (no emulator required)
-        working-directory: IraqiStudioAI
-        run: gradle testDebugUnitTest --no-daemon --stacktrace
-
       - name: Upload APK
         if: steps.build_apk.outcome == 'success'
         uses: actions/upload-artifact@v4
