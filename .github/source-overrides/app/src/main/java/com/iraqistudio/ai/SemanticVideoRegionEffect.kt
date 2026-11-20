@@ -173,7 +173,7 @@ private class VideoSkyFrameSegmenter(context: Context) : AutoCloseable {
             val output = ByteBuffer.allocateDirect(interpreter.getOutputTensor(0).numBytes()).order(ByteOrder.nativeOrder())
             interpreter.run(input, output)
             output.rewind()
-            val labels = ByteArray(512 * 512) { index -> if (output.int == 2) 1 else 0 }
+            val labels = ByteArray(512 * 512) { index -> if (output.int == 2) 1.toByte() else 0.toByte() }
             return SegmentationMasks(512, 512, labels)
         } finally {
             if (modelFrame !== frame && !modelFrame.isRecycled) modelFrame.recycle()
