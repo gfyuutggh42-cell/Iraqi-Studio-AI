@@ -9,6 +9,10 @@ on:
       - '.github/workflows/android.yml'
       - '.github/source-overrides/**'
 
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -184,6 +188,6 @@ jobs:
           profile: pixel_2
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096 -cores 2
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048 -cores 2
           script: cd IraqiStudioAI && timeout 25m gradle connectedDebugAndroidTest --no-daemon --stacktrace
 
