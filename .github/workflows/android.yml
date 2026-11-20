@@ -1,4 +1,5 @@
 name: Build Iraqi Studio AI
+# Rebuild the current editor UI commit after source-only updates.
 
 on:
   workflow_dispatch:
