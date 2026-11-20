@@ -44,4 +44,44 @@ class VideoRegionColorEngineInstrumentedTest {
             source.recycle()
         }
     }
+
+    @Test
+    fun applyAllKeepsFourIndependentRegionSettings() {
+        val source = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+        val base = Color.rgb(90, 110, 130)
+        source.setPixels(intArrayOf(base, base, base, base), 0, 2, 0, 0, 2, 2)
+        val person = SegmentationMasks(2, 2, byteArrayOf(3, 0, 4, 0))
+        val sky = SegmentationMasks(2, 2, byteArrayOf(0, 1, 0, 0))
+        try {
+            val faceOnly = VideoRegionColorEngine.applyAll(
+                source, person, sky,
+                mapOf(VideoColorRegion.FACE to RegionColorSettings(brightness = 0.2f))
+            )
+            try {
+                val pixels = IntArray(4)
+                faceOnly.getPixels(pixels, 0, 2, 0, 0, 2, 2)
+                assertNotEquals(base, pixels[0])
+                assertEquals(base, pixels[1])
+                assertEquals(base, pixels[2])
+                assertEquals(base, pixels[3])
+            } finally {
+                faceOnly.recycle()
+            }
+
+            val allRegions = VideoRegionColorEngine.applyAll(
+                source, person, sky,
+                VideoColorRegion.values().associateWith { RegionColorSettings(brightness = 0.2f) }
+            )
+            try {
+                val pixels = IntArray(4)
+                allRegions.getPixels(pixels, 0, 2, 0, 0, 2, 2)
+                for (index in pixels.indices) assertNotEquals("region pixel $index should be graded", base, pixels[index])
+            } finally {
+                allRegions.recycle()
+            }
+        } finally {
+            source.recycle()
+        }
+    }
+
 }
