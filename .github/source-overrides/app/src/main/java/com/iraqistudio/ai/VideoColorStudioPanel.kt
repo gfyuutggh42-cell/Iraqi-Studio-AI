@@ -1,6 +1,8 @@
 package com.iraqistudio.ai
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,7 +35,8 @@ fun VideoColorStudioPanel(
     settings: RegionColorSettings,
     onRegionSelected: (VideoColorRegion) -> Unit,
     onSettingsChanged: (RegionColorSettings) -> Unit,
-    onAnalyzeFrame: () -> Unit
+    onAnalyzeFrame: () -> Unit,
+    compact: Boolean = false
 ) {
     val regions = listOf(
         VideoColorRegion.FACE to ("الوجه والبشرة" to "ضبط لون البشرة ودفئها"),
@@ -41,6 +44,58 @@ fun VideoColorStudioPanel(
         VideoColorRegion.CLOTHING to ("الملابس" to "تعديل ألوان الملابس وحدها"),
         VideoColorRegion.BACKGROUND to ("الخلفية" to "ألوان الخلفية دون السماء")
     )
+    if (compact) {
+        var selectedControl by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("درجة اللون") }
+        val controlNames = listOf("درجة اللون", "التشبع", "الإضاءة", "التباين", "الدفء")
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = ColorStudioPanel),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text("تعديل ذكي للمناطق", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("AI • 4 مناطق", color = ColorStudioAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    regions.forEach { (region, info) ->
+                        FilterChip(
+                            selected = selectedRegion == region,
+                            onClick = { onRegionSelected(region) },
+                            label = { Text(info.first, fontSize = 11.sp) }
+                        )
+                    }
+                }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    controlNames.forEach { name ->
+                        FilterChip(
+                            selected = selectedControl == name,
+                            onClick = { selectedControl = name },
+                            label = { Text(name, fontSize = 11.sp) }
+                        )
+                    }
+                }
+                when (selectedControl) {
+                    "درجة اللون" -> ColorSlider("درجة اللون", settings.hueDegrees, -180f..180f, "${settings.hueDegrees.toInt()}°") { onSettingsChanged(settings.copy(hueDegrees = it)) }
+                    "التشبع" -> ColorSlider("التشبع", settings.saturation, 0f..2f, "${(settings.saturation * 100).toInt()}%") { onSettingsChanged(settings.copy(saturation = it)) }
+                    "الإضاءة" -> ColorSlider("الإضاءة", settings.brightness, -0.5f..0.5f, "${(settings.brightness * 100).toInt()}%") { onSettingsChanged(settings.copy(brightness = it)) }
+                    "التباين" -> ColorSlider("التباين", settings.contrast, 0.5f..1.8f, "${(settings.contrast * 100).toInt()}%") { onSettingsChanged(settings.copy(contrast = it)) }
+                    "الدفء" -> ColorSlider("دفء اللون", settings.warmth, -1f..1f, "${(settings.warmth * 100).toInt()}%") { onSettingsChanged(settings.copy(warmth = it)) }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(if (analyzing) "جارٍ تحليل الإطار..." else "تطبيق المعاينة على الإطار", color = Color(0xFFB9C5D5), fontSize = 10.sp)
+                    Button(
+                        onClick = onAnalyzeFrame,
+                        enabled = hasVideo && !analyzing,
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 5.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ColorStudioAccent, contentColor = Color(0xFF071510)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("معاينة", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
+        return
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = ColorStudioPanel),
