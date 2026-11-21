@@ -2,6 +2,8 @@ package com.iraqistudio.ai
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Color
 import android.graphics.Matrix
 import android.opengl.GLES20
@@ -101,9 +103,15 @@ private class SemanticRegionFrameProcessor(
                 if (personSegmenter == null) personSegmenter = VideoPersonSegmenter(appContext)
                 if (skySegmenter == null) skySegmenter = VideoSkyFrameSegmenter(appContext)
 
-                analysis = Bitmap.createScaledBitmap(frame, 512, 512, true)
-                val personMask = personSegmenter!!.segmentFrame(analysis!!, timestampMs)
-                val skyMask = skySegmenter!!.segmentFrame(analysis!!)
+                // Keep the source aspect ratio. Stretching portrait/landscape clips
+                // into a square makes the segmentation models misclassify faces,
+                // clothing and sky, then paints those wrong masks onto the full frame.
+                val prepared = prepareSemanticFrame(frame)
+                analysis = prepared.bitmap
+                val rawPersonMask = personSegmenter!!.segmentFrame(analysis!!, timestampMs)
+                val rawSkyMask = skySegmenter!!.segmentFrame(analysis!!)
+                val personMask = cropSemanticMask(rawPersonMask, prepared)
+                val skyMask = cropSemanticMask(rawSkyMask, prepared)
                 val processed = VideoRegionColorEngine.applyAll(frame, personMask, skyMask, settings)
                 result.set(processed)
             } catch (error: Throwable) {
@@ -152,6 +160,50 @@ private class SemanticRegionFrameProcessor(
         }
         worker.shutdown()
     }
+}
+
+/**
+ * Square model input with the original frame fitted (not stretched) into it.
+ * The mask is cropped back to the fitted image rectangle before being mapped
+ * onto the original frame coordinates.
+ */
+private data class PreparedSemanticFrame(
+    val bitmap: Bitmap,
+    val contentWidth: Int,
+    val contentHeight: Int,
+    val offsetX: Int,
+    val offsetY: Int
+)
+
+private fun prepareSemanticFrame(source: Bitmap): PreparedSemanticFrame {
+    val scale = minOf(512f / source.width, 512f / source.height)
+    val contentWidth = (source.width * scale).toInt().coerceIn(1, 512)
+    val contentHeight = (source.height * scale).toInt().coerceIn(1, 512)
+    val offsetX = (512 - contentWidth) / 2
+    val offsetY = (512 - contentHeight) / 2
+    val fitted = Bitmap.createScaledBitmap(source, contentWidth, contentHeight, true)
+    val square = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
+    try {
+        val canvas = Canvas(square)
+        canvas.drawColor(Color.BLACK)
+        canvas.drawBitmap(fitted, offsetX.toFloat(), offsetY.toFloat(), Paint(Paint.FILTER_BITMAP_FLAG))
+    } finally {
+        if (fitted !== source && !fitted.isRecycled) fitted.recycle()
+    }
+    return PreparedSemanticFrame(square, contentWidth, contentHeight, offsetX, offsetY)
+}
+
+private fun cropSemanticMask(mask: SegmentationMasks, frame: PreparedSemanticFrame): SegmentationMasks {
+    require(mask.width == 512 && mask.height == 512 && mask.labels.size == 512 * 512) {
+        "أبعاد قناع الذكاء الاصطناعي غير متوافقة"
+    }
+    val cropped = ByteArray(frame.contentWidth * frame.contentHeight)
+    for (y in 0 until frame.contentHeight) {
+        val sourceOffset = (y + frame.offsetY) * mask.width + frame.offsetX
+        val targetOffset = y * frame.contentWidth
+        mask.labels.copyInto(cropped, targetOffset, sourceOffset, sourceOffset + frame.contentWidth)
+    }
+    return SegmentationMasks(frame.contentWidth, frame.contentHeight, cropped)
 }
 
 /** Reuses one ADE20K interpreter for the complete video instead of reloading it per frame. */
