@@ -413,12 +413,23 @@ fun StudioScreen() {
                                     }
                                     frame = decoded
                                     val output = withContext(Dispatchers.Default) {
-                                        val personMask = VideoPersonSegmenter(context).use { it.segmentFrame(decoded, max(1L, timestampUs / 1000L)) }
-                                        val skyMask = segmentSky(context, decoded)
-                                        VideoRegionColorEngine.apply(
-                                            decoded, personMask, skyMask, selectedVideoRegion,
-                                            regionSettings[selectedVideoRegion] ?: RegionColorSettings()
-                                        )
+                                        // Use the exact same aspect-preserving model input and mask
+                                        // coordinate mapping as the per-frame export processor.
+                                        val prepared = prepareSemanticFrame(decoded)
+                                        try {
+                                            val rawPersonMask = VideoPersonSegmenter(context).use {
+                                                it.segmentFrame(prepared.bitmap, max(1L, timestampUs / 1000L))
+                                            }
+                                            val rawSkyMask = segmentSky(context, prepared.bitmap)
+                                            val personMask = cropSemanticMask(rawPersonMask, prepared)
+                                            val skyMask = cropSemanticMask(rawSkyMask, prepared)
+                                            VideoRegionColorEngine.apply(
+                                                decoded, personMask, skyMask, selectedVideoRegion,
+                                                regionSettings[selectedVideoRegion] ?: RegionColorSettings()
+                                            )
+                                        } finally {
+                                            if (!prepared.bitmap.isRecycled) prepared.bitmap.recycle()
+                                        }
                                     }
                                     analyzedVideoFrame?.recycle()
                                     analyzedVideoFrame = output
