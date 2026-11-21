@@ -91,4 +91,4 @@ fun segmentSky(context: Context, bitmap: Bitmap): SegmentationMasks {
     }
 }
 
-private const val SKY_CLASS_ID = 2
+internal const val SKY_CLASS_ID = 2
