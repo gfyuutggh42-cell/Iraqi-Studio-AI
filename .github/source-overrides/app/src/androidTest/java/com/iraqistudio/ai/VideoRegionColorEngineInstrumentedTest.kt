@@ -46,6 +46,34 @@ class VideoRegionColorEngineInstrumentedTest {
     }
 
     @Test
+    fun faceRegionIncludesFaceAndExposedBodySkinWithoutChangingOtherRegions() {
+        val source = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+        val base = Color.rgb(90, 110, 130)
+        source.eraseColor(base)
+        // MediaPipe Selfie Multiclass labels: 2 = body skin, 3 = face skin.
+        val person = SegmentationMasks(2, 2, byteArrayOf(3, 2, 4, 0))
+        val sky = SegmentationMasks(2, 2, byteArrayOf(0, 0, 0, 1))
+        try {
+            val output = VideoRegionColorEngine.apply(
+                source, person, sky, VideoColorRegion.FACE,
+                RegionColorSettings(brightness = 0.2f)
+            )
+            try {
+                val pixels = IntArray(4)
+                output.getPixels(pixels, 0, 2, 0, 0, 2, 2)
+                assertNotEquals("face skin must change", base, pixels[0])
+                assertNotEquals("exposed body skin must change", base, pixels[1])
+                assertEquals("clothing must remain untouched", base, pixels[2])
+                assertEquals("background/sky must remain untouched", base, pixels[3])
+            } finally {
+                output.recycle()
+            }
+        } finally {
+            source.recycle()
+        }
+    }
+
+    @Test
     fun applyAllKeepsFourIndependentRegionSettings() {
         val source = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
         val base = Color.rgb(90, 110, 130)
