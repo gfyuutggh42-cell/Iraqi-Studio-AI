@@ -54,25 +54,29 @@ class SemanticVideoExportInstrumentedTest {
 
         val completed = CountDownLatch(1)
         var exportFailure: Throwable? = null
-        val transformer = Transformer.Builder(context)
-            .addListener(object : Transformer.Listener {
-                override fun onCompleted(composition: Composition, exportResult: ExportResult) {
-                    completed.countDown()
-                }
-
-                override fun onError(
-                    composition: Composition,
-                    exportResult: ExportResult,
-                    exportException: ExportException
-                ) {
-                    exportFailure = exportException
-                    completed.countDown()
-                }
-            })
-            .build()
-
+        // Transformer is thread-confined to the application's main thread.
+        // Instrumentation test methods run on a separate thread, so construct
+        // and start it through runOnMainSync rather than invoking it directly.
         try {
-            transformer.start(editedItem, output.absolutePath)
+            instrumentation.runOnMainSync {
+                val transformer = Transformer.Builder(context)
+                    .addListener(object : Transformer.Listener {
+                        override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                            completed.countDown()
+                        }
+
+                        override fun onError(
+                            composition: Composition,
+                            exportResult: ExportResult,
+                            exportException: ExportException
+                        ) {
+                            exportFailure = exportException
+                            completed.countDown()
+                        }
+                    })
+                    .build()
+                transformer.start(editedItem, output.absolutePath)
+            }
             assertTrue("Semantic video export timed out", completed.await(8, TimeUnit.MINUTES))
             assertNotNull("Transformer failed to export semantic video frames", output)
             exportFailure?.let { throw AssertionError("Semantic MP4 export failed", it) }
