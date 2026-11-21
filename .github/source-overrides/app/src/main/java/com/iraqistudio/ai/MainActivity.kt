@@ -368,6 +368,19 @@ fun StudioScreen() {
     val player = remember(videoUri) {
         videoUri?.let { uri ->
             ExoPlayer.Builder(context).build().apply {
+                // Media3 requires the video-effects pipeline to be configured
+                // at least once BEFORE prepare(). Later slider changes can
+                // safely replace this initial effect list during playback.
+                setVideoEffects(
+                    buildVideoEffectsWithSemanticRegions(
+                        context,
+                        videoFilter,
+                        videoBrightness,
+                        videoSaturation,
+                        videoBlur,
+                        regionSettings = regionSettings
+                    )
+                )
                 setMediaItem(MediaItem.fromUri(uri))
                 prepare()
             }
