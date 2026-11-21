@@ -211,5 +211,20 @@ jobs:
             adb shell settings put global animator_duration_scale 0
             adb shell pm path android
             cd IraqiStudioAI
-            timeout 25m gradle connectedDebugAndroidTest --no-daemon --stacktrace
+            # Build the instrumentation APK without invoking UTP's ddmlib installer.
+            timeout 25m gradle assembleDebugAndroidTest --no-daemon --stacktrace
+            test -s app/build/outputs/apk/debug/app-debug.apk
+            test -s app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+
+            # Install both APKs through Android's package manager directly.
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+
+            # Confirm the instrumentation runner is registered before launching tests.
+            adb shell pm list instrumentation | grep -F 'com.iraqistudio.ai.test/androidx.test.runner.AndroidJUnitRunner'
+
+            # Run tests directly; require an explicit JUnit success summary.
+            adb shell am instrument -w -r com.iraqistudio.ai.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee instrumentation-results.txt
+            grep -Eq 'OK \\([0-9]+ tests?\\)' instrumentation-results.txt
+            ! grep -q 'FAILURES!!!' instrumentation-results.txt
 
