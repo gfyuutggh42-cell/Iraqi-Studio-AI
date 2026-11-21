@@ -188,6 +188,28 @@ jobs:
           profile: pixel_2
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048 -cores 2
-          script: cd IraqiStudioAI && timeout 25m gradle connectedDebugAndroidTest --no-daemon --stacktrace
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072 -cores 2
+          script: |
+            set -euo pipefail
+            adb start-server
+            adb wait-for-device
+            booted=""
+            for attempt in $(seq 1 36); do
+              booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+              if [ "$booted" = "1" ]; then
+                break
+              fi
+              sleep 5
+            done
+            if [ "$booted" != "1" ]; then
+              echo "Android 10 emulator did not finish booting."
+              adb devices -l
+              exit 1
+            fi
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
+            adb shell pm path android
+            cd IraqiStudioAI
+            timeout 25m gradle connectedDebugAndroidTest --no-daemon --stacktrace
 
