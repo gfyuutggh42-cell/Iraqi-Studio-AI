@@ -177,6 +177,46 @@ jobs:
           path: IraqiStudioAI/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
+      - name: Prepare Android 10 instrumentation script
+        run: |
+          cat > .github/run-android10-tests.sh <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          # The action splits its script input into individual lines.
+          # Keep control flow in this file so Bash executes it as one program.
+          adb start-server
+          adb wait-for-device
+          booted=""
+          for attempt in $(seq 1 36); do
+            booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+            if [ "$booted" = "1" ]; then
+              break
+            fi
+            sleep 5
+          done
+          if [ "$booted" != "1" ]; then
+            echo "Android 10 emulator did not finish booting."
+            adb devices -l
+            exit 1
+          fi
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb shell pm path android
+
+          cd IraqiStudioAI
+          timeout 25m gradle assembleDebugAndroidTest --no-daemon --stacktrace
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          test -s app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+
+          adb install -r app/build/outputs/apk/debug/app-debug.apk
+          adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          adb shell pm list instrumentation | grep -F 'com.iraqistudio.ai.test/androidx.test.runner.AndroidJUnitRunner'
+          adb shell am instrument -w -r com.iraqistudio.ai.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee instrumentation-results.txt
+          grep -Eq 'OK \([0-9]+ tests?\)' instrumentation-results.txt
+          ! grep -q 'FAILURES!!!' instrumentation-results.txt
+          SCRIPT
+
       - name: Run video region segmentation tests on Android 10 emulator
         continue-on-error: false
         uses: reactivecircus/android-emulator-runner@v2
@@ -189,16 +229,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072 -cores 2
-          script: |
-            set -euo pipefail
-            # android-emulator-runner has already waited for sys.boot_completed.
-            # Avoid a second custom boot loop: its script runner executes lines separately.
-            adb shell pm path android
-            cd IraqiStudioAI
-            # Build the instrumentation APK without invoking UTP's ddmlib installer.
-            timeout 25m gradle assembleDebugAndroidTest --no-daemon --stacktrace
-            test -s app/build/outputs/apk/debug/app-debug.apk
-            test -s app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          script: bash .github/run-android10-tests.sh
 
             # Install both APKs through Android's package manager directly.
             adb install -r app/build/outputs/apk/debug/app-debug.apk
