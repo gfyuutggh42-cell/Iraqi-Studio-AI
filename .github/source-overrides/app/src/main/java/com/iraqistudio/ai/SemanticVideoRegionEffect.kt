@@ -167,7 +167,7 @@ private class SemanticRegionFrameProcessor(
  * The mask is cropped back to the fitted image rectangle before being mapped
  * onto the original frame coordinates.
  */
-private data class PreparedSemanticFrame(
+internal data class PreparedSemanticFrame(
     val bitmap: Bitmap,
     val contentWidth: Int,
     val contentHeight: Int,
@@ -175,7 +175,7 @@ private data class PreparedSemanticFrame(
     val offsetY: Int
 )
 
-private fun prepareSemanticFrame(source: Bitmap): PreparedSemanticFrame {
+internal fun prepareSemanticFrame(source: Bitmap): PreparedSemanticFrame {
     val scale = minOf(512f / source.width, 512f / source.height)
     val contentWidth = (source.width * scale).toInt().coerceIn(1, 512)
     val contentHeight = (source.height * scale).toInt().coerceIn(1, 512)
@@ -193,7 +193,7 @@ private fun prepareSemanticFrame(source: Bitmap): PreparedSemanticFrame {
     return PreparedSemanticFrame(square, contentWidth, contentHeight, offsetX, offsetY)
 }
 
-private fun cropSemanticMask(mask: SegmentationMasks, frame: PreparedSemanticFrame): SegmentationMasks {
+internal fun cropSemanticMask(mask: SegmentationMasks, frame: PreparedSemanticFrame): SegmentationMasks {
     require(mask.width > 0 && mask.height > 0 && mask.labels.size == mask.width * mask.height) {
         "أبعاد قناع الذكاء الاصطناعي غير متوافقة"
     }
