@@ -194,16 +194,24 @@ private fun prepareSemanticFrame(source: Bitmap): PreparedSemanticFrame {
 }
 
 private fun cropSemanticMask(mask: SegmentationMasks, frame: PreparedSemanticFrame): SegmentationMasks {
-    require(mask.width == 512 && mask.height == 512 && mask.labels.size == 512 * 512) {
+    require(mask.width > 0 && mask.height > 0 && mask.labels.size == mask.width * mask.height) {
         "أبعاد قناع الذكاء الاصطناعي غير متوافقة"
     }
-    val cropped = ByteArray(frame.contentWidth * frame.contentHeight)
-    for (y in 0 until frame.contentHeight) {
-        val sourceOffset = (y + frame.offsetY) * mask.width + frame.offsetX
-        val targetOffset = y * frame.contentWidth
-        mask.labels.copyInto(cropped, targetOffset, sourceOffset, sourceOffset + frame.contentWidth)
+    // MediaPipe's person model emits a 256x256 mask, while ADE20K emits
+    // 512x512. Convert the fitted-image rectangle into each mask's own grid.
+    val left = (frame.offsetX.toLong() * mask.width / 512L).toInt()
+    val top = (frame.offsetY.toLong() * mask.height / 512L).toInt()
+    val cropWidth = (frame.contentWidth.toLong() * mask.width / 512L).toInt().coerceAtLeast(1)
+    val cropHeight = (frame.contentHeight.toLong() * mask.height / 512L).toInt().coerceAtLeast(1)
+    val safeWidth = cropWidth.coerceAtMost(mask.width - left)
+    val safeHeight = cropHeight.coerceAtMost(mask.height - top)
+    val cropped = ByteArray(safeWidth * safeHeight)
+    for (y in 0 until safeHeight) {
+        val sourceOffset = (y + top) * mask.width + left
+        val targetOffset = y * safeWidth
+        mask.labels.copyInto(cropped, targetOffset, sourceOffset, sourceOffset + safeWidth)
     }
-    return SegmentationMasks(frame.contentWidth, frame.contentHeight, cropped)
+    return SegmentationMasks(safeWidth, safeHeight, cropped)
 }
 
 /** Reuses one ADE20K interpreter for the complete video instead of reloading it per frame. */
