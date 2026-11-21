@@ -8,6 +8,8 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.opengl.GLES20
 import android.opengl.GLUtils
+import android.os.SystemClock
+import android.util.Log
 import androidx.media3.common.Effect
 import androidx.media3.common.util.GlRect
 import androidx.media3.common.util.Size
@@ -21,6 +23,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Runs semantic masks and region color grading on EVERY video frame delivered
@@ -64,6 +67,7 @@ private class SemanticRegionFrameProcessor(
         Thread(runnable, "semantic-video-frame-worker").apply { priority = Thread.NORM_PRIORITY - 1 }
     }
     private val released = AtomicBoolean(false)
+    private val diagnosticFrameCount = AtomicInteger(0)
     private var frameWidth = 0
     private var frameHeight = 0
     private var lastTimestampMs = -1L
@@ -86,6 +90,9 @@ private class SemanticRegionFrameProcessor(
         presentationTimeUs: Long
     ): ListenableFuture<Bitmap> {
         val result = SettableFuture.create<Bitmap>()
+        val frameNumber = diagnosticFrameCount.incrementAndGet()
+        val traceFrame = frameNumber <= 3 || frameNumber % 15 == 0
+        val frameStartMs = SystemClock.elapsedRealtime()
         // Copy before returning: Media3 may recycle the input buffer once this future completes.
         val frame = try {
             // ByteBufferGlEffect stores pixels in GL's bottom-up row order.
@@ -102,8 +109,10 @@ private class SemanticRegionFrameProcessor(
             result.setException(error)
             return result
         }
+        if (traceFrame) Log.i("SemanticVideo", "frame=$frameNumber queued size=${image.width}x${image.height} sky=$needsSkyMask")
         worker.execute {
             var analysis: Bitmap? = null
+            val workerStartMs = SystemClock.elapsedRealtime()
             try {
                 check(!released.get()) { "معالج فلاتر الفيديو أُغلق" }
                 val timestampMs = maxOf(presentationTimeUs / 1000L, lastTimestampMs + 1L)
@@ -114,19 +123,29 @@ private class SemanticRegionFrameProcessor(
                 // Keep the source aspect ratio. Stretching portrait/landscape clips
                 // into a square makes the segmentation models misclassify faces,
                 // clothing and sky, then paints those wrong masks onto the full frame.
+                val prepareStartMs = SystemClock.elapsedRealtime()
                 val prepared = prepareSemanticFrame(frame)
                 analysis = prepared.bitmap
+                val prepareMs = SystemClock.elapsedRealtime() - prepareStartMs
+                val personStartMs = SystemClock.elapsedRealtime()
                 val rawPersonMask = personSegmenter!!.segmentFrame(analysis!!, timestampMs)
+                val personMs = SystemClock.elapsedRealtime() - personStartMs
                 val personMask = cropSemanticMask(rawPersonMask, prepared)
+                val skyStartMs = SystemClock.elapsedRealtime()
                 val skyMask = if (needsSkyMask) {
                     cropSemanticMask(skySegmenter!!.segmentFrame(analysis!!), prepared)
                 } else {
                     // Face/clothing-only edits do not need ADE20K inference.
                     SegmentationMasks(1, 1, byteArrayOf(0))
                 }
+                val skyMs = SystemClock.elapsedRealtime() - skyStartMs
+                val colorStartMs = SystemClock.elapsedRealtime()
                 val processed = VideoRegionColorEngine.applyAll(frame, personMask, skyMask, settings)
+                val colorMs = SystemClock.elapsedRealtime() - colorStartMs
+                if (traceFrame) Log.i("SemanticVideo", "frame=$frameNumber ms queue=${workerStartMs-frameStartMs} prepare=$prepareMs person=$personMs sky=$skyMs color=$colorMs worker=${SystemClock.elapsedRealtime()-workerStartMs}")
                 result.set(processed)
             } catch (error: Throwable) {
+                Log.e("SemanticVideo", "frame=$frameNumber failed after ${SystemClock.elapsedRealtime()-workerStartMs}ms", error)
                 result.setException(error)
             } finally {
                 if (analysis != null && analysis !== frame && !analysis!!.isRecycled) analysis!!.recycle()
@@ -141,6 +160,7 @@ private class SemanticRegionFrameProcessor(
         presentationTimeUs: Long,
         result: Bitmap
     ) {
+        val blendStartMs = SystemClock.elapsedRealtime()
         var upload = result
         try {
             if (result.width != outputFrame.width || result.height != outputFrame.height) {
@@ -156,6 +176,8 @@ private class SemanticRegionFrameProcessor(
             GLUtils.texSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, glUpload)
             glUpload.recycle()
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, previous[0])
+            val completedFrames = diagnosticFrameCount.get()
+            if (completedFrames <= 3 || completedFrames % 15 == 0) Log.i("SemanticVideo", "frame=$completedFrames GL upload=${SystemClock.elapsedRealtime()-blendStartMs}ms")
         } finally {
             if (upload !== result && !upload.isRecycled) upload.recycle()
             if (!result.isRecycled) result.recycle()
