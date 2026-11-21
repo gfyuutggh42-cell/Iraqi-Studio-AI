@@ -12,6 +12,29 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class VideoRegionColorEngineInstrumentedTest {
     @Test
+    fun skyModelIsRequiredOnlyForActiveSkyOrBackgroundControls() {
+        assertTrue("sky adjustment must request sky inference", requiresSkySegmentation(
+            mapOf(VideoColorRegion.SKY to RegionColorSettings(brightness = 0.1f))
+        ))
+        assertTrue("background adjustment must request sky inference to exclude sky", requiresSkySegmentation(
+            mapOf(VideoColorRegion.BACKGROUND to RegionColorSettings(brightness = 0.1f))
+        ))
+        assertTrue("combined sky/background adjustment must request sky inference", requiresSkySegmentation(
+            mapOf(
+                VideoColorRegion.SKY to RegionColorSettings(brightness = 0.1f),
+                VideoColorRegion.BACKGROUND to RegionColorSettings(brightness = 0.1f)
+            )
+        ))
+        assertEquals(false, requiresSkySegmentation(
+            mapOf(VideoColorRegion.FACE to RegionColorSettings(brightness = 0.1f))
+        ))
+        assertEquals(false, requiresSkySegmentation(
+            mapOf(VideoColorRegion.CLOTHING to RegionColorSettings(saturation = 1.2f))
+        ))
+        assertEquals(false, requiresSkySegmentation(emptyMap()))
+    }
+
+    @Test
     fun eachRegionChangesOnlyItsOwnPixels() {
         val source = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
         val base = Color.rgb(90, 110, 130)
