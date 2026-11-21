@@ -46,6 +46,31 @@ class VideoRegionColorEngineInstrumentedTest {
     }
 
     @Test
+    fun portraitAndLandscapeMasksAreCroppedToAspectPreservedFrameArea() {
+        val source = Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888)
+        val prepared = prepareSemanticFrame(source)
+        try {
+            assertEquals(512, prepared.contentWidth)
+            assertEquals(288, prepared.contentHeight)
+            assertEquals(0, prepared.offsetX)
+            assertEquals(112, prepared.offsetY)
+
+            // Simulate the 256x256 MediaPipe category mask. The content rectangle
+            // occupies rows 56..199 after the 16:9 image is letterboxed.
+            val labels = ByteArray(256 * 256) { index ->
+                if (index / 256 in 56..199) 4 else 0
+            }
+            val cropped = cropSemanticMask(SegmentationMasks(256, 256, labels), prepared)
+            assertEquals(256, cropped.width)
+            assertEquals(144, cropped.height)
+            assertTrue("letterbox pixels must not leak into the mapped mask", cropped.labels.all { it.toInt() == 4 })
+        } finally {
+            prepared.bitmap.recycle()
+            source.recycle()
+        }
+    }
+
+    @Test
     fun faceRegionIncludesFaceAndExposedBodySkinWithoutChangingOtherRegions() {
         val source = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
         val base = Color.rgb(90, 110, 130)
