@@ -225,6 +225,6 @@ jobs:
 
             # Run tests directly; require an explicit JUnit success summary.
             adb shell am instrument -w -r com.iraqistudio.ai.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee instrumentation-results.txt
-            grep -Eq 'OK \\([0-9]+ tests?\\)' instrumentation-results.txt
+            grep -Eq 'OK \([0-9]+ tests?\)' instrumentation-results.txt
             ! grep -q 'FAILURES!!!' instrumentation-results.txt
 
