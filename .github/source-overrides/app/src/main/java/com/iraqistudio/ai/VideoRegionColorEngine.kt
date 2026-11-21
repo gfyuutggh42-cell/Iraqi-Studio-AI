@@ -54,7 +54,7 @@ object VideoRegionColorEngine {
                 val personClass = personMask.categoryAt(x, y, width, height)
                 val isSky = skyMask.categoryAt(x, y, width, height) == 1 && personClass == 0
                 val selected = when (region) {
-                    VideoColorRegion.FACE -> personClass == 3
+                    VideoColorRegion.FACE -> personClass == 2 || personClass == 3
                     VideoColorRegion.SKY -> isSky
                     VideoColorRegion.CLOTHING -> personClass == 4
                     // Exclude the sky from background so the two controls stay independent.
@@ -113,7 +113,7 @@ object VideoRegionColorEngine {
                 val personClass = personMask.categoryAt(x, y, width, height)
                 val isSky = skyMask.categoryAt(x, y, width, height) == 1 && personClass == 0
                 val region = when {
-                    personClass == 3 -> VideoColorRegion.FACE
+                    personClass == 2 || personClass == 3 -> VideoColorRegion.FACE
                     personClass == 4 -> VideoColorRegion.CLOTHING
                     isSky -> VideoColorRegion.SKY
                     personClass == 0 -> VideoColorRegion.BACKGROUND
