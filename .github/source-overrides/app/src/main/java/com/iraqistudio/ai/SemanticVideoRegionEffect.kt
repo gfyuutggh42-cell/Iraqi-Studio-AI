@@ -44,14 +44,22 @@ fun buildVideoEffectsWithSemanticRegions(
     return effects
 }
 
-private fun RegionColorSettings.isNeutral(): Boolean =
+internal fun RegionColorSettings.isNeutral(): Boolean =
     hueDegrees == 0f && saturation == 1f && brightness == 0f && contrast == 1f && warmth == 0f
+
+/** Sky inference is only needed when sky/background controls are actually active. */
+internal fun requiresSkySegmentation(
+    settings: Map<VideoColorRegion, RegionColorSettings>
+): Boolean = listOf(VideoColorRegion.SKY, VideoColorRegion.BACKGROUND).any { region ->
+    !(settings[region] ?: RegionColorSettings()).sanitized().isNeutral()
+}
 
 private class SemanticRegionFrameProcessor(
     private val appContext: Context,
     settings: Map<VideoColorRegion, RegionColorSettings>
 ) : ByteBufferGlEffect.Processor<Bitmap> {
     private val settings = VideoColorRegion.values().associateWith { (settings[it] ?: RegionColorSettings()).sanitized() }
+    private val needsSkyMask = requiresSkySegmentation(this.settings)
     private val worker = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "semantic-video-frame-worker").apply { priority = Thread.NORM_PRIORITY - 1 }
     }
@@ -101,7 +109,7 @@ private class SemanticRegionFrameProcessor(
                 val timestampMs = maxOf(presentationTimeUs / 1000L, lastTimestampMs + 1L)
                 lastTimestampMs = timestampMs
                 if (personSegmenter == null) personSegmenter = VideoPersonSegmenter(appContext)
-                if (skySegmenter == null) skySegmenter = VideoSkyFrameSegmenter(appContext)
+                if (needsSkyMask && skySegmenter == null) skySegmenter = VideoSkyFrameSegmenter(appContext)
 
                 // Keep the source aspect ratio. Stretching portrait/landscape clips
                 // into a square makes the segmentation models misclassify faces,
@@ -109,9 +117,13 @@ private class SemanticRegionFrameProcessor(
                 val prepared = prepareSemanticFrame(frame)
                 analysis = prepared.bitmap
                 val rawPersonMask = personSegmenter!!.segmentFrame(analysis!!, timestampMs)
-                val rawSkyMask = skySegmenter!!.segmentFrame(analysis!!)
                 val personMask = cropSemanticMask(rawPersonMask, prepared)
-                val skyMask = cropSemanticMask(rawSkyMask, prepared)
+                val skyMask = if (needsSkyMask) {
+                    cropSemanticMask(skySegmenter!!.segmentFrame(analysis!!), prepared)
+                } else {
+                    // Face/clothing-only edits do not need ADE20K inference.
+                    SegmentationMasks(1, 1, byteArrayOf(0))
+                }
                 val processed = VideoRegionColorEngine.applyAll(frame, personMask, skyMask, settings)
                 result.set(processed)
             } catch (error: Throwable) {
@@ -217,6 +229,10 @@ internal fun cropSemanticMask(mask: SegmentationMasks, frame: PreparedSemanticFr
 /** Reuses one ADE20K interpreter for the complete video instead of reloading it per frame. */
 private class VideoSkyFrameSegmenter(context: Context) : AutoCloseable {
     private val interpreter: Interpreter
+    // Reuse frame-sized working memory instead of allocating tensor buffers per frame.
+    private val pixels = IntArray(512 * 512)
+    private val input: ByteBuffer
+    private val output: ByteBuffer
 
     init {
         val model = context.assets.openFd("deeplabv3_ade20k.tflite").use { afd ->
@@ -229,25 +245,26 @@ private class VideoSkyFrameSegmenter(context: Context) : AutoCloseable {
         require(interpreter.getInputTensor(0).dataType() == DataType.FLOAT32)
         require(interpreter.getOutputTensor(0).shape().contentEquals(intArrayOf(1, 512, 512)))
         require(interpreter.getOutputTensor(0).dataType() == DataType.INT32)
+        input = ByteBuffer.allocateDirect(interpreter.getInputTensor(0).numBytes()).order(ByteOrder.nativeOrder())
+        output = ByteBuffer.allocateDirect(interpreter.getOutputTensor(0).numBytes()).order(ByteOrder.nativeOrder())
     }
 
     fun segmentFrame(frame: Bitmap): SegmentationMasks {
         val modelFrame = if (frame.width == 512 && frame.height == 512) frame
             else Bitmap.createScaledBitmap(frame, 512, 512, true)
         try {
-            val pixels = IntArray(512 * 512)
             modelFrame.getPixels(pixels, 0, 512, 0, 0, 512, 512)
-            val input = ByteBuffer.allocateDirect(interpreter.getInputTensor(0).numBytes()).order(ByteOrder.nativeOrder())
+            input.clear()
             for (pixel in pixels) {
                 input.putFloat(Color.red(pixel) / 255f)
                 input.putFloat(Color.green(pixel) / 255f)
                 input.putFloat(Color.blue(pixel) / 255f)
             }
             input.rewind()
-            val output = ByteBuffer.allocateDirect(interpreter.getOutputTensor(0).numBytes()).order(ByteOrder.nativeOrder())
+            output.clear()
             interpreter.run(input, output)
             output.rewind()
-            val labels = ByteArray(512 * 512) { index -> if (output.int == 2) 1.toByte() else 0.toByte() }
+            val labels = ByteArray(512 * 512) { index -> if (output.int == SKY_CLASS_ID) 1.toByte() else 0.toByte() }
             return SegmentationMasks(512, 512, labels)
         } finally {
             if (modelFrame !== frame && !modelFrame.isRecycled) modelFrame.recycle()
