@@ -93,47 +93,79 @@ object VideoRegionColorEngine {
         settings: Map<VideoColorRegion, RegionColorSettings>
     ): Bitmap {
         require(!source.isRecycled) { "إطار الفيديو غير صالح" }
+        require(personMask.width > 0 && personMask.height > 0)
+        require(personMask.labels.size == personMask.width * personMask.height)
+        require(skyMask.width > 0 && skyMask.height > 0)
+        require(skyMask.labels.size == skyMask.width * skyMask.height)
+
         val configs = VideoColorRegion.values().associateWith {
             (settings[it] ?: RegionColorSettings()).sanitized()
         }
-        if (configs.values.all {
-                it.hueDegrees == 0f && it.saturation == 1f &&
-                    it.brightness == 0f && it.contrast == 1f && it.warmth == 0f
-            }) return source.copy(Bitmap.Config.ARGB_8888, true)
+        if (configs.values.all { it.isNeutral() }) {
+            return source.copy(Bitmap.Config.ARGB_8888, true)
+        }
 
         val width = source.width
         val height = source.height
         val pixels = IntArray(width * height)
         source.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        // Map each destination coordinate once. The previous implementation
+        // performed two 64-bit divisions for every pixel in every video frame.
+        val maskX = IntArray(width) { x ->
+            (x.toLong() * personMask.width / width).toInt().coerceIn(0, personMask.width - 1)
+        }
+        val personY = IntArray(height) { y ->
+            (y.toLong() * personMask.height / height).toInt().coerceIn(0, personMask.height - 1)
+        }
+        val skyX = IntArray(width) { x ->
+            (x.toLong() * skyMask.width / width).toInt().coerceIn(0, skyMask.width - 1)
+        }
+        val skyY = IntArray(height) { y ->
+            (y.toLong() * skyMask.height / height).toInt().coerceIn(0, skyMask.height - 1)
+        }
+
+        val face = configs.getValue(VideoColorRegion.FACE)
+        val sky = configs.getValue(VideoColorRegion.SKY)
+        val clothing = configs.getValue(VideoColorRegion.CLOTHING)
+        val background = configs.getValue(VideoColorRegion.BACKGROUND)
         val hsv = FloatArray(3)
 
         for (y in 0 until height) {
+            val personRow = personY[y] * personMask.width
+            val skyRow = skyY[y] * skyMask.width
+            val pixelRow = y * width
             for (x in 0 until width) {
-                val index = y * width + x
-                val personClass = personMask.categoryAt(x, y, width, height)
-                val isSky = skyMask.categoryAt(x, y, width, height) == 1 && personClass == 0
-                val region = when {
-                    personClass == 2 || personClass == 3 -> VideoColorRegion.FACE
-                    personClass == 4 -> VideoColorRegion.CLOTHING
-                    isSky -> VideoColorRegion.SKY
-                    personClass == 0 -> VideoColorRegion.BACKGROUND
-                    else -> null
-                } ?: continue
-                val config = configs.getValue(region)
-                if (config.hueDegrees == 0f && config.saturation == 1f &&
-                    config.brightness == 0f && config.contrast == 1f && config.warmth == 0f
-                ) continue
+                val personClass = personMask.labels[personRow + maskX[x]].toInt() and 0xff
+                val isSky = (skyMask.labels[skyRow + skyX[x]].toInt() and 0xff) == 1 && personClass == 0
+                val config = when {
+                    personClass == 2 || personClass == 3 -> face
+                    personClass == 4 -> clothing
+                    isSky -> sky
+                    personClass == 0 -> background
+                    else -> continue
+                }
+                if (config.isNeutral()) continue
 
+                val index = pixelRow + x
                 val original = pixels[index]
                 val alpha = Color.alpha(original)
                 val brightness = config.brightness * 255f
                 val red = (((Color.red(original) - 128f) * config.contrast) + 128f + brightness + config.warmth * 30f).toInt().coerceIn(0, 255)
                 val green = (((Color.green(original) - 128f) * config.contrast) + 128f + brightness).toInt().coerceIn(0, 255)
                 val blue = (((Color.blue(original) - 128f) * config.contrast) + 128f + brightness - config.warmth * 30f).toInt().coerceIn(0, 255)
-                Color.colorToHSV(Color.argb(alpha, red, green, blue), hsv)
-                hsv[0] = (hsv[0] + config.hueDegrees + 360f) % 360f
-                hsv[1] = (hsv[1] * config.saturation).coerceIn(0f, 1f)
-                pixels[index] = Color.HSVToColor(alpha, hsv)
+                val toned = Color.argb(alpha, red, green, blue)
+
+                // Brightness/contrast/warmth-only edits do not need an HSV
+                // round trip. Keep HSV conversion exclusively for hue/saturation.
+                if (config.hueDegrees != 0f || config.saturation != 1f) {
+                    Color.colorToHSV(toned, hsv)
+                    hsv[0] = (hsv[0] + config.hueDegrees + 360f) % 360f
+                    hsv[1] = (hsv[1] * config.saturation).coerceIn(0f, 1f)
+                    pixels[index] = Color.HSVToColor(alpha, hsv)
+                } else {
+                    pixels[index] = toned
+                }
             }
         }
 
