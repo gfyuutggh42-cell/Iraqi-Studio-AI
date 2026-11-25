@@ -212,9 +212,20 @@ jobs:
           adb install -r app/build/outputs/apk/debug/app-debug.apk
           adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
           adb shell pm list instrumentation | grep -F 'com.iraqistudio.ai.test/androidx.test.runner.AndroidJUnitRunner'
+          adb logcat -c
+          set +e
           adb shell am instrument -w -r com.iraqistudio.ai.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee instrumentation-results.txt
+          instrumentation_status=${PIPESTATUS[0]}
+          set -e
+          # Preserve per-frame inference / processing / GL timings even when an
+          # instrumentation assertion fails or the export hits its timeout.
+          adb logcat -d -v threadtime -s SemanticVideo:I AndroidRuntime:E > semantic-video-logcat.txt
+          echo "Instrumentation exit status: ${instrumentation_status}"
+          echo "Semantic video diagnostics:"
+          cat semantic-video-logcat.txt
           grep -Eq 'OK \([0-9]+ tests?\)' instrumentation-results.txt
           ! grep -q 'FAILURES!!!' instrumentation-results.txt
+          test "${instrumentation_status}" -eq 0
           SCRIPT
 
       - name: Run video region segmentation tests on Android 10 emulator
