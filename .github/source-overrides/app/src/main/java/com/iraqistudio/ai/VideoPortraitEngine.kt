@@ -13,7 +13,7 @@ import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenter
  * Stateful VIDEO-mode segmentation. Keep one instance for the complete clip;
  * timestamps must be strictly increasing and expressed in milliseconds.
  */
-class VideoPersonSegmenter(context: Context) : AutoCloseable {
+class VideoPersonSegmenter(context: Context) : PersonVideoFrameSegmenter {
     private val segmenter: ImageSegmenter
     private var lastTimestampMs = -1L
 
@@ -28,7 +28,7 @@ class VideoPersonSegmenter(context: Context) : AutoCloseable {
     }
 
     @Synchronized
-    fun segmentFrame(frame: Bitmap, timestampMs: Long): SegmentationMasks {
+    override fun segmentFrame(frame: Bitmap, timestampMs: Long): SegmentationMasks {
         require(!frame.isRecycled) { "الإطار غير صالح" }
         require(timestampMs > lastTimestampMs) { "يجب أن تكون أوقات الإطارات متزايدة" }
         val result = segmenter.segmentForVideo(BitmapImageBuilder(frame).build(), timestampMs)
