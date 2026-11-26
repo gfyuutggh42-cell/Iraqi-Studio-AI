@@ -40,13 +40,14 @@ class SemanticVideoExportInstrumentedTest {
             VideoColorRegion.SKY to RegionColorSettings(brightness = 0.35f),
             VideoColorRegion.BACKGROUND to RegionColorSettings(brightness = 0.35f)
         )
-        val effects = buildVideoEffectsWithSemanticRegions(
+        val effects = buildVideoEffectsWithSemanticRegionsForTest(
             context = context,
             preset = "طبيعي",
             brightness = 0f,
             saturation = 0f,
             blurSigma = 0f,
-            regionSettings = settings
+            regionSettings = settings,
+            segmenterFactory = FastDeterministicSegmenters
         )
         val editedItem = EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(input)))
             .setEffects(Effects(emptyList(), effects))
@@ -115,6 +116,22 @@ class SemanticVideoExportInstrumentedTest {
             input.delete()
             output.delete()
         }
+    }
+
+    private object FastDeterministicSegmenters : SemanticVideoSegmenterFactory {
+        override fun createPerson(context: android.content.Context): PersonVideoFrameSegmenter =
+            object : PersonVideoFrameSegmenter {
+                override fun segmentFrame(frame: Bitmap, timestampMs: Long) =
+                    SegmentationMasks(1, 1, byteArrayOf(0))
+                override fun close() = Unit
+            }
+
+        override fun createSky(context: android.content.Context): SkyVideoFrameSegmenter =
+            object : SkyVideoFrameSegmenter {
+                override fun segmentFrame(frame: Bitmap) =
+                    SegmentationMasks(1, 1, byteArrayOf(1))
+                override fun close() = Unit
+            }
     }
 
     private fun meanLuma(bitmap: Bitmap): Double {
