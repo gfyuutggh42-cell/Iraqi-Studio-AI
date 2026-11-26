@@ -39,10 +39,58 @@ fun buildVideoEffectsWithSemanticRegions(
     blurSigma: Float,
     outputHeight: Int = 0,
     regionSettings: Map<VideoColorRegion, RegionColorSettings>
+): List<Effect> = buildVideoEffectsWithSemanticRegionsInternal(
+    context, preset, brightness, saturation, blurSigma, outputHeight, regionSettings,
+    OnDeviceSemanticVideoSegmenterFactory
+)
+
+internal interface PersonVideoFrameSegmenter : AutoCloseable {
+    fun segmentFrame(frame: Bitmap, timestampMs: Long): SegmentationMasks
+}
+
+internal interface SkyVideoFrameSegmenter : AutoCloseable {
+    fun segmentFrame(frame: Bitmap): SegmentationMasks
+}
+
+internal interface SemanticVideoSegmenterFactory {
+    fun createPerson(context: Context): PersonVideoFrameSegmenter
+    fun createSky(context: Context): SkyVideoFrameSegmenter
+}
+
+private object OnDeviceSemanticVideoSegmenterFactory : SemanticVideoSegmenterFactory {
+    override fun createPerson(context: Context): PersonVideoFrameSegmenter = VideoPersonSegmenter(context)
+    override fun createSky(context: Context): SkyVideoFrameSegmenter = VideoSkyFrameSegmenter(context)
+}
+
+/** Test seam: keeps the production frame processor and Media3 export path intact. */
+internal fun buildVideoEffectsWithSemanticRegionsForTest(
+    context: Context,
+    preset: String,
+    brightness: Float,
+    saturation: Float,
+    blurSigma: Float,
+    outputHeight: Int = 0,
+    regionSettings: Map<VideoColorRegion, RegionColorSettings>,
+    segmenterFactory: SemanticVideoSegmenterFactory
+): List<Effect> = buildVideoEffectsWithSemanticRegionsInternal(
+    context, preset, brightness, saturation, blurSigma, outputHeight, regionSettings, segmenterFactory
+)
+
+private fun buildVideoEffectsWithSemanticRegionsInternal(
+    context: Context,
+    preset: String,
+    brightness: Float,
+    saturation: Float,
+    blurSigma: Float,
+    outputHeight: Int,
+    regionSettings: Map<VideoColorRegion, RegionColorSettings>,
+    segmenterFactory: SemanticVideoSegmenterFactory
 ): List<Effect> {
     val effects = buildVideoEffects(preset, brightness, saturation, blurSigma, outputHeight).toMutableList()
     if (regionSettings.values.any { !it.isNeutral() }) {
-        effects += ByteBufferGlEffect(SemanticRegionFrameProcessor(context.applicationContext, regionSettings))
+        effects += ByteBufferGlEffect(
+            SemanticRegionFrameProcessor(context.applicationContext, regionSettings, segmenterFactory)
+        )
     }
     return effects
 }
@@ -59,7 +107,8 @@ internal fun requiresSkySegmentation(
 
 private class SemanticRegionFrameProcessor(
     private val appContext: Context,
-    settings: Map<VideoColorRegion, RegionColorSettings>
+    settings: Map<VideoColorRegion, RegionColorSettings>,
+    private val segmenterFactory: SemanticVideoSegmenterFactory
 ) : ByteBufferGlEffect.Processor<Bitmap> {
     private val settings = VideoColorRegion.values().associateWith { (settings[it] ?: RegionColorSettings()).sanitized() }
     private val needsSkyMask = requiresSkySegmentation(this.settings)
@@ -71,8 +120,8 @@ private class SemanticRegionFrameProcessor(
     private var frameWidth = 0
     private var frameHeight = 0
     private var lastTimestampMs = -1L
-    private var personSegmenter: VideoPersonSegmenter? = null
-    private var skySegmenter: VideoSkyFrameSegmenter? = null
+    private var personSegmenter: PersonVideoFrameSegmenter? = null
+    private var skySegmenter: SkyVideoFrameSegmenter? = null
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
         frameWidth = inputWidth
@@ -117,8 +166,8 @@ private class SemanticRegionFrameProcessor(
                 check(!released.get()) { "معالج فلاتر الفيديو أُغلق" }
                 val timestampMs = maxOf(presentationTimeUs / 1000L, lastTimestampMs + 1L)
                 lastTimestampMs = timestampMs
-                if (personSegmenter == null) personSegmenter = VideoPersonSegmenter(appContext)
-                if (needsSkyMask && skySegmenter == null) skySegmenter = VideoSkyFrameSegmenter(appContext)
+                if (personSegmenter == null) personSegmenter = segmenterFactory.createPerson(appContext)
+                if (needsSkyMask && skySegmenter == null) skySegmenter = segmenterFactory.createSky(appContext)
 
                 // Keep the source aspect ratio. Stretching portrait/landscape clips
                 // into a square makes the segmentation models misclassify faces,
@@ -249,7 +298,7 @@ internal fun cropSemanticMask(mask: SegmentationMasks, frame: PreparedSemanticFr
 }
 
 /** Reuses one ADE20K interpreter for the complete video instead of reloading it per frame. */
-private class VideoSkyFrameSegmenter(context: Context) : AutoCloseable {
+private class VideoSkyFrameSegmenter(context: Context) : SkyVideoFrameSegmenter {
     private val interpreter: Interpreter
     // Reuse frame-sized working memory instead of allocating tensor buffers per frame.
     private val pixels = IntArray(512 * 512)
@@ -271,7 +320,7 @@ private class VideoSkyFrameSegmenter(context: Context) : AutoCloseable {
         output = ByteBuffer.allocateDirect(interpreter.getOutputTensor(0).numBytes()).order(ByteOrder.nativeOrder())
     }
 
-    fun segmentFrame(frame: Bitmap): SegmentationMasks {
+    override fun segmentFrame(frame: Bitmap): SegmentationMasks {
         val modelFrame = if (frame.width == 512 && frame.height == 512) frame
             else Bitmap.createScaledBitmap(frame, 512, 512, true)
         try {
